@@ -1,2708 +1,1625 @@
-1. First, let's set up the foundational files:
-package.json
+Main App Structure (src/App.jsx)
+jsx
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import { JobProvider } from './context/JobContext';
+import Layout from './components/layout/Layout';
+import Home from './pages/Home';
+import Login from './pages/Auth/Login';
+import Register from './pages/Auth/Register';
+import Jobs from './pages/Jobs/Jobs';
+import JobDetails from './pages/Jobs/JobDetails';
+import PostJob from './pages/Jobs/PostJob';
+import Dashboard from './pages/Dashboard/Dashboard';
+import Profile from './pages/Profile/Profile';
+import MyApplications from './pages/Applications/MyApplications';
+import ProtectedRoute from './components/common/ProtectedRoute';
+import NotFound from './pages/NotFound';
 
-json
-{
-  "name": "job-portal-frontend",
-  "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "test": "jest",
-    "cypress:open": "cypress open"
-  },
-  "dependencies": {
-    "axios": "^1.6.2",
-    "bcryptjs": "^2.4.3",
-    "date-fns": "^2.30.0",
-    "formik": "^2.4.5",
-    "jsonwebtoken": "^9.0.2",
-    "next": "^14.0.3",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-hook-form": "^7.49.2",
-    "react-icons": "^4.11.0",
-    "react-toastify": "^9.1.3",
-    "swr": "^2.2.0",
-    "tailwindcss": "^3.3.3",
-    "typescript": "^5.3.2",
-    "yup": "^1.3.2",
-    "zustand": "^4.4.5"
-  },
-  "devDependencies": {
-    "@types/bcryptjs": "^2.4.2",
-    "@types/jsonwebtoken": "^9.0.3",
-    "@types/node": "^20.10.3",
-    "@types/react": "^18.2.41",
-    "@types/react-dom": "^18.2.18",
-    "autoprefixer": "^10.4.16",
-    "cypress": "^13.5.1",
-    "eslint": "^8.55.0",
-    "eslint-config-next": "14.0.3",
-    "jest": "^29.7.0",
-    "postcss": "^8.4.31",
-    "prettier": "^3.1.1",
-    "ts-jest": "^29.1.1"
-  }
+function App() {
+  return (
+    <Router>
+      <AuthProvider>
+        <JobProvider>
+          <Layout>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/jobs" element={<Jobs />} />
+              <Route path="/jobs/:id" element={<JobDetails />} />
+              
+              <Route element={<ProtectedRoute allowedRoles={['employer', 'admin']} />}>
+                <Route path="/post-job" element={<PostJob />} />
+              </Route>
+              
+              <Route element={<ProtectedRoute />}>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/my-applications" element={<MyApplications />} />
+              </Route>
+              
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Layout>
+        </JobProvider>
+      </AuthProvider>
+    </Router>
+  );
 }
-tailwind.config.js
 
-javascript
+export default App;
+2. Tailwind Configuration (tailwind.config.js)
+js
 module.exports = {
   content: [
-    "./src/**/*.{js,ts,jsx,tsx}",
+    "./src/**/*.{js,jsx,ts,tsx}",
   ],
   theme: {
     extend: {
       colors: {
         primary: {
-          DEFAULT: '#4F46E5',
-          light: '#6366F1',
-          dark: '#4338CA',
+          50: '#f0f9ff',
+          100: '#e0f2fe',
+          200: '#bae6fd',
+          300: '#7dd3fc',
+          400: '#38bdf8',
+          500: '#0ea5e9',
+          600: '#0284c7',
+          700: '#0369a1',
+          800: '#075985',
+          900: '#0c4a6e',
         },
         secondary: {
-          DEFAULT: '#10B981',
-          light: '#34D399',
-          dark: '#059669',
+          50: '#f5f3ff',
+          100: '#ede9fe',
+          200: '#ddd6fe',
+          300: '#c4b5fd',
+          400: '#a78bfa',
+          500: '#8b5cf6',
+          600: '#7c3aed',
+          700: '#6d28d9',
+          800: '#5b21b6',
+          900: '#4c1d95',
         },
-        danger: {
-          DEFAULT: '#EF4444',
-          light: '#F87171',
-          dark: '#DC2626',
-        },
-        warning: {
-          DEFAULT: '#F59E0B',
-          light: '#FBBF24',
-          dark: '#D97706',
-        },
+      },
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
       },
     },
   },
-  plugins: [],
+  plugins: [
+    require('@tailwindcss/forms'),
+    require('@tailwindcss/typography'),
+    require('@tailwindcss/aspect-ratio'),
+  ],
 }
-2. Let's implement the core authentication components:
-src/components/auth/login-form.tsx
+3. Authentication Context (src/context/AuthContext.jsx)
+jsx
+import { createContext, useContext, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import api from '../services/api';
 
-tsx
-import { useRouter } from 'next/navigation'
-import { useForm } from 'react-hook-form'
-import { yupResolver } from '@hookform/resolvers/yup'
-import * as yup from 'yup'
-import { toast } from 'react-toastify'
-import { login } from '@/lib/auth'
+const AuthContext = createContext();
 
-const schema = yup.object().shape({
-  email: yup.string().email('Invalid email').required('Email is required'),
-  password: yup.string().required('Password is required'),
-})
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
-export default function LoginForm() {
-  const router = useRouter()
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm({
-    resolver: yupResolver(schema),
-  })
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        if (token) {
+          api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+          const res = await api.get('/auth/me');
+          setUser(res.data);
+          setIsAuthenticated(true);
+        }
+      } catch (err) {
+        logout();
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    checkAuth();
+  }, [token]);
 
-  const onSubmit = async (data) => {
+  const login = async (email, password) => {
     try {
-      const response = await login(data)
-      toast.success('Login successful!')
-      router.push(
-        response.role === 'student' 
-          ? '/dashboard' 
-          : response.role === 'employer' 
-            ? '/company/dashboard' 
-            : '/admin/dashboard'
-      )
-    } catch (error) {
-      toast.error(error.message || 'Login failed')
+      const res = await api.post('/auth/login', { email, password });
+      localStorage.setItem('token', res.data.token);
+      setToken(res.data.token);
+      setUser(res.data.user);
+      setIsAuthenticated(true);
+      navigate('/dashboard');
+      return { success: true };
+    } catch (err) {
+      return { success: false, message: err.response?.data?.error || 'Login failed' };
     }
+  };
+
+  const register = async (userData) => {
+    try {
+      const res = await api.post('/auth/register', userData);
+      localStorage.setItem('token', res.data.token);
+      setToken(res.data.token);
+      setUser(res.data.user);
+      setIsAuthenticated(true);
+      navigate('/dashboard');
+      return { success: true };
+    } catch (err) {
+      return { success: false, message: err.response?.data?.error || 'Registration failed' };
+    }
+  };
+
+  const logout = () => {
+    localStorage.removeItem('token');
+    delete api.defaults.headers.common['Authorization'];
+    setToken(null);
+    setUser(null);
+    setIsAuthenticated(false);
+    navigate('/login');
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        isAuthenticated,
+        loading,
+        login,
+        register,
+        logout,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => useContext(AuthContext);
+4. Beautiful Home Page (src/pages/Home.jsx)
+jsx
+import { Link } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import HeroImage from '../../assets/images/hero.jpg';
+import { FaSearch, FaBriefcase, FaUserGraduate, FaBuilding } from 'react-icons/fa';
+
+const Home = () => {
+  const { isAuthenticated, user } = useAuth();
+
+  return (
+    <div className="min-h-screen">
+      {/* Hero Section */}
+      <div className="relative bg-gradient-to-r from-primary-700 to-primary-900 text-white py-20">
+        <div className="container mx-auto px-4 flex flex-col md:flex-row items-center">
+          <div className="md:w-1/2 mb-10 md:mb-0">
+            <h1 className="text-4xl md:text-5xl font-bold mb-6">
+              Find Your Dream <span className="text-secondary-400">Internship</span> or <span className="text-secondary-400">Job</span>
+            </h1>
+            <p className="text-xl mb-8">
+              StageX connects students with top companies for internships and entry-level positions. Start your career journey today!
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4">
+              {!isAuthenticated ? (
+                <>
+                  <Link 
+                    to="/register" 
+                    className="bg-secondary-600 hover:bg-secondary-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 text-center"
+                  >
+                    Get Started
+                  </Link>
+                  <Link 
+                    to="/login" 
+                    className="bg-white hover:bg-gray-100 text-primary-700 font-bold py-3 px-6 rounded-lg transition duration-300 text-center"
+                  >
+                    Sign In
+                  </Link>
+                </>
+              ) : (
+                <Link 
+                  to={user?.role === 'employer' ? '/post-job' : '/jobs'} 
+                  className="bg-secondary-600 hover:bg-secondary-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 text-center"
+                >
+                  {user?.role === 'employer' ? 'Post a Job' : 'Browse Jobs'}
+                </Link>
+              )}
+            </div>
+          </div>
+          <div className="md:w-1/2">
+            <img 
+              src={HeroImage} 
+              alt="Career growth" 
+              className="rounded-lg shadow-2xl w-full max-w-md mx-auto"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Features Section */}
+      <div className="py-16 bg-white">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center mb-12 text-gray-800">Why Choose StageX?</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="bg-gray-50 p-6 rounded-lg shadow-md hover:shadow-lg transition duration-300">
+              <div className="text-primary-600 mb-4">
+                <FaSearch className="text-4xl" />
+              </div>
+              <h3 className="text-xl font-semibold mb-3 text-gray-800">Smart Search</h3>
+              <p className="text-gray-600">
+                Find the perfect match with our advanced search filters tailored for students and recent graduates.
+              </p>
+            </div>
+            <div className="bg-gray-50 p-6 rounded-lg shadow-md hover:shadow-lg transition duration-300">
+              <div className="text-primary-600 mb-4">
+                <FaBriefcase className="text-4xl" />
+              </div>
+              <h3 className="text-xl font-semibold mb-3 text-gray-800">Diverse Opportunities</h3>
+              <p className="text-gray-600">
+                Access thousands of internships and entry-level jobs from top companies across various industries.
+              </p>
+            </div>
+            <div className="bg-gray-50 p-6 rounded-lg shadow-md hover:shadow-lg transition duration-300">
+              <div className="text-primary-600 mb-4">
+                <FaUserGraduate className="text-4xl" />
+              </div>
+              <h3 className="text-xl font-semibold mb-3 text-gray-800">Career Growth</h3>
+              <p className="text-gray-600">
+                Get personalized recommendations and resources to help you grow in your chosen career path.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Call to Action */}
+      <div className="py-16 bg-primary-50">
+        <div className="container mx-auto px-4 text-center">
+          <h2 className="text-3xl font-bold mb-6 text-gray-800">Ready to jumpstart your career?</h2>
+          <p className="text-xl mb-8 text-gray-600 max-w-2xl mx-auto">
+            Join thousands of students and employers who are already using StageX to connect and grow.
+          </p>
+          <Link 
+            to={isAuthenticated ? (user?.role === 'employer' ? '/post-job' : '/jobs') : '/register'} 
+            className="inline-block bg-primary-600 hover:bg-primary-700 text-white font-bold py-3 px-8 rounded-lg transition duration-300"
+          >
+            {isAuthenticated ? 
+              (user?.role === 'employer' ? 'Post a Job' : 'Browse Jobs') : 
+              'Get Started Now'}
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Home;
+5. Job Listing Page (src/pages/Jobs/Jobs.jsx)
+jsx
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../../../context/AuthContext';
+import api from '../../../services/api';
+import JobCard from '../../components/jobs/JobCard';
+import SearchFilters from '../../components/jobs/SearchFilters';
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
+
+const Jobs = () => {
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [filters, setFilters] = useState({
+    search: '',
+    type: '',
+    location: '',
+  });
+  const { user } = useAuth();
+
+  useEffect(() => {
+    const fetchJobs = async () => {
+      try {
+        setLoading(true);
+        const params = {};
+        if (filters.search) params.title = filters.search;
+        if (filters.type) params.type = filters.type;
+        if (filters.location) params.location = filters.location;
+        
+        const res = await api.get('/jobs', { params });
+        setJobs(res.data.data);
+        setLoading(false);
+      } catch (err) {
+        setError(err.response?.data?.error || 'Failed to fetch jobs');
+        setLoading(false);
+      }
+    };
+
+    fetchJobs();
+  }, [filters]);
+
+  const handleFilterChange = (e) => {
+    const { name, value } = e.target;
+    setFilters(prev => ({ ...prev, [name]: value }));
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="container mx-auto px-4">
+        <div className="flex flex-col md:flex-row gap-8">
+          {/* Filters Sidebar */}
+          <div className="md:w-1/4">
+            <SearchFilters filters={filters} onChange={handleFilterChange} />
+          </div>
+          
+          {/* Job Listings */}
+          <div className="md:w-3/4">
+            <div className="flex justify-between items-center mb-6">
+              <h1 className="text-2xl font-bold text-gray-800">
+                {filters.search ? `Results for "${filters.search}"` : 'All Job Listings'}
+              </h1>
+              {user?.role === 'employer' && (
+                <Link 
+                  to="/post-job" 
+                  className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-md transition duration-300"
+                >
+                  Post New Job
+                </Link>
+              )}
+            </div>
+
+            {loading ? (
+              <div className="flex justify-center mt-12">
+                <LoadingSpinner />
+              </div>
+            ) : error ? (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                {error}
+              </div>
+            ) : jobs.length === 0 ? (
+              <div className="bg-white p-6 rounded-lg shadow-md text-center">
+                <h3 className="text-lg font-medium text-gray-800 mb-2">No jobs found</h3>
+                <p className="text-gray-600">Try adjusting your search filters</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {jobs.map(job => (
+                  <JobCard 
+                    key={job._id} 
+                    job={job} 
+                    showApply={user?.role === 'student'} 
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Jobs;
+6. Job Card Component (src/components/jobs/JobCard.jsx)
+jsx
+import { Link } from 'react-router-dom';
+import { formatDistanceToNow } from 'date-fns';
+import { FaMapMarkerAlt, FaClock, FaBriefcase, FaDollarSign } from 'react-icons/fa';
+
+const JobCard = ({ job, showApply }) => {
+  return (
+    <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition duration-300">
+      <div className="p-6">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-2">
+              {job.company?.profile?.companyLogo ? (
+                <img 
+                  src={job.company.profile.companyLogo} 
+                  alt={job.company.name} 
+                  className="w-12 h-12 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-primary-100 flex items-center justify-center">
+                  <span className="text-primary-600 font-bold text-lg">
+                    {job.company?.name?.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+              )}
+              <div>
+                <h3 className="text-xl font-semibold text-gray-800">
+                  <Link to={`/jobs/${job._id}`} className="hover:text-primary-600 transition duration-300">
+                    {job.title}
+                  </Link>
+                </h3>
+                <p className="text-gray-600">{job.company?.name}</p>
+              </div>
+            </div>
+            
+            <div className="mt-4 flex flex-wrap gap-4">
+              <div className="flex items-center text-gray-600">
+                <FaMapMarkerAlt className="mr-2 text-primary-600" />
+                <span>{job.location}</span>
+              </div>
+              <div className="flex items-center text-gray-600">
+                <FaBriefcase className="mr-2 text-primary-600" />
+                <span className="capitalize">{job.type.replace('-', ' ')}</span>
+              </div>
+              {job.salary && (
+                <div className="flex items-center text-gray-600">
+                  <FaDollarSign className="mr-2 text-primary-600" />
+                  <span>${job.salary.toLocaleString()}/year</span>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex flex-col items-end">
+            <span className="text-sm text-gray-500 mb-2">
+              Posted {formatDistanceToNow(new Date(job.createdAt), { addSuffix: true })}
+            </span>
+            {showApply && (
+              <Link 
+                to={`/jobs/${job._id}/apply`}
+                className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-md transition duration-300 text-sm"
+              >
+                Apply Now
+              </Link>
+            )}
+          </div>
+        </div>
+        
+        <div className="mt-4 pt-4 border-t border-gray-100">
+          <p className="text-gray-600 line-clamp-2">{job.description}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {job.skills.slice(0, 5).map((skill, index) => (
+              <span 
+                key={index} 
+                className="bg-primary-100 text-primary-800 text-xs px-2 py-1 rounded"
+              >
+                {skill}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default JobCard;
+7. Application Form (src/components/applications/ApplicationForm.jsx)
+jsx
+import { useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../../context/AuthContext';
+import api from '../../../services/api';
+import FileUpload from '../../ui/FileUpload';
+
+const ApplicationForm = () => {
+  const { id: jobId } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [formData, setFormData] = useState({
+    coverLetter: '',
+    resume: null,
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleFileChange = (file) => {
+    setFormData(prev => ({ ...prev, resume: file }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      const formDataToSend = new FormData();
+      formDataToSend.append('coverLetter', formData.coverLetter);
+      if (formData.resume) {
+        formDataToSend.append('resume', formData.resume);
+      }
+
+      await api.post(`/jobs/${jobId}/applications`, formDataToSend, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      navigate('/my-applications', { 
+        state: { message: 'Application submitted successfully!' } 
+      });
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to submit application');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6">
+      <h2 className="text-2xl font-bold text-gray-800 mb-6">Submit Application</h2>
+      
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          {error}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit}>
+        <div className="mb-6">
+          <label htmlFor="coverLetter" className="block text-sm font-medium text-gray-700 mb-2">
+            Cover Letter
+          </label>
+          <textarea
+            id="coverLetter"
+            name="coverLetter"
+            rows="6"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+            placeholder="Explain why you're a good fit for this position..."
+            value={formData.coverLetter}
+            onChange={handleChange}
+          />
+        </div>
+
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Resume
+          </label>
+          {user?.profile?.resume ? (
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-2">Your current resume:</p>
+              <a 
+                href={`${process.env.REACT_APP_API_URL}/uploads/${user.profile.resume}`} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-primary-600 hover:underline"
+              >
+                View Current Resume
+              </a>
+            </div>
+          ) : null}
+          <FileUpload 
+            accept=".pdf"
+            onFileChange={handleFileChange}
+            label="Upload new resume (PDF only)"
+          />
+          <p className="mt-1 text-sm text-gray-500">
+            Upload a PDF file (max 2MB)
+          </p>
+        </div>
+
+        <div className="flex justify-end gap-4">
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+          >
+            {loading ? 'Submitting...' : 'Submit Application'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+export default ApplicationForm;
+8. Employer Dashboard (src/pages/Dashboard/EmployerDashboard.jsx)
+jsx
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import api from '../../../services/api';
+import DashboardCard from '../../components/dashboard/DashboardCard';
+import JobStatsChart from '../../components/dashboard/JobStatsChart';
+import RecentApplications from '../../components/dashboard/RecentApplications';
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
+
+const EmployerDashboard = () => {
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setLoading(true);
+        const [jobsRes, appsRes] = await Promise.all([
+          api.get('/jobs?limit=5'),
+          api.get('/applications?limit=5'),
+        ]);
+        
+        const totalJobs = jobsRes.data.total;
+        const totalApplications = appsRes.data.total;
+        const recentJobs = jobsRes.data.data;
+        const recentApplications = appsRes.data.data;
+        
+        setStats({
+          totalJobs,
+          totalApplications,
+          recentJobs,
+          recentApplications,
+        });
+        setLoading(false);
+      } catch (err) {
+        setError(err.response?.data?.error || 'Failed to load dashboard data');
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+        {error}
+      </div>
+    );
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      <div>
-        <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-          Email
-        </label>
-        <input
-          id="email"
-          type="email"
-          {...register('email')}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-        />
-        {errors.email && <p className="mt-1 text-sm text-danger">{errors.email.message}</p>}
-      </div>
-
-      <div>
-        <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-          Password
-        </label>
-        <input
-          id="password"
-          type="password"
-          {...register('password')}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-        />
-        {errors.password && <p className="mt-1 text-sm text-danger">{errors.password.message}</p>}
-      </div>
-
-      <div className="flex items-center justify-between">
-        <div className="flex items-center">
-          <input
-            id="remember-me"
-            name="remember-me"
-            type="checkbox"
-            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-          />
-          <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
-            Remember me
-          </label>
-        </div>
-
-        <div className="text-sm">
-          <a href="/auth/forgot-password" className="font-medium text-primary hover:text-primary-dark">
-            Forgot your password?
-          </a>
-        </div>
-      </div>
-
-      <div>
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="flex w-full justify-center rounded-md border border-transparent bg-primary py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+    <div className="space-y-8">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-gray-800">Employer Dashboard</h1>
+        <Link 
+          to="/post-job" 
+          className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-md transition duration-300"
         >
-          {isSubmitting ? 'Signing in...' : 'Sign in'}
-        </button>
+          Post New Job
+        </Link>
       </div>
-    </form>
-  )
-}
-3. Let's create the API client configuration:
-src/lib/api.ts
 
-typescript
-import axios from 'axios'
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <DashboardCard 
+          title="Total Jobs Posted"
+          value={stats.totalJobs}
+          icon="briefcase"
+          color="primary"
+        />
+        <DashboardCard 
+          title="Total Applications"
+          value={stats.totalApplications}
+          icon="document-text"
+          color="secondary"
+        />
+        <DashboardCard 
+          title="Active Listings"
+          value={stats.recentJobs.filter(job => job.isActive).length}
+          icon="check-circle"
+          color="green"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-lg shadow-md">
+          <h2 className="text-lg font-semibold mb-4 text-gray-800">Job Statistics</h2>
+          <JobStatsChart jobs={stats.recentJobs} />
+        </div>
+        <div className="bg-white p-6 rounded-lg shadow-md">
+          <h2 className="text-lg font-semibold mb-4 text-gray-800">Recent Applications</h2>
+          <RecentApplications applications={stats.recentApplications} />
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-lg shadow-md">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold text-gray-800">Recent Job Postings</h2>
+          <Link 
+            to="/jobs" 
+            className="text-primary-600 hover:text-primary-800 text-sm font-medium"
+          >
+            View All
+          </Link>
+        </div>
+        <div className="space-y-4">
+          {stats.recentJobs.length > 0 ? (
+            stats.recentJobs.map(job => (
+              <div key={job._id} className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-medium text-gray-800">
+                      <Link to={`/jobs/${job._id}`} className="hover:text-primary-600">
+                        {job.title}
+                      </Link>
+                    </h3>
+                    <p className="text-sm text-gray-600">{job.type} • {job.location}</p>
+                  </div>
+                  <span className={`px-2 py-1 text-xs rounded-full ${
+                    job.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    {job.isActive ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="text-gray-600">No recent job postings</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default EmployerDashboard;
+9. API Service (src/services/api.js)
+jsx
+import axios from 'axios';
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-})
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
+});
 
 // Add a request interceptor
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('token');
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+      config.headers['Authorization'] = `Bearer ${token}`;
     }
-    return config
+    return config;
   },
-  (error) => Promise.reject(error)
-)
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
 // Add a response interceptor
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      window.location.href = '/auth/login'
+      // Handle unauthorized access
+      localStorage.removeItem('token');
+      window.location = '/login';
     }
-    return Promise.reject(error)
+    return Promise.reject(error);
   }
-)
+);
 
-export default api
-4. Let's implement the auth utilities:
-src/lib/auth.ts
+export default api;
 
-typescript
-import api from './api'
-import { User } from '@/types/user.types'
+continuation
+First, let's complete the src/components/ directory:
+src/components/auth/LoginForm.jsx
+jsx
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../../../context/AuthContext';
 
-export const login = async (credentials: { email: string; password: string }) => {
-  const response = await api.post('/auth/login', credentials)
-  const { token, role } = response.data
-  localStorage.setItem('token', token)
-  return { token, role }
-}
+const LoginForm = () => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const { login, loading } = useAuth();
 
-export const register = async (userData: {
-  name: string
-  email: string
-  password: string
-  role: string
-}) => {
-  const response = await api.post('/auth/register', userData)
-  const { token, role } = response.data
-  localStorage.setItem('token', token)
-  return { token, role }
-}
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    await login(email, password);
+  };
 
-export const getCurrentUser = async (): Promise<User> => {
-  const response = await api.get('/auth/me')
-  return response.data.data
-}
-
-export const logout = () => {
-  localStorage.removeItem('token')
-  localStorage.removeItem('user')
-  window.location.href = '/auth/login'
-}
-
-export const isAuthenticated = () => {
-  return !!localStorage.getItem('token')
-}
-
-export const getToken = () => {
-  return localStorage.getItem('token')
-}
-5. Let's create the protected route component:
-src/components/auth/protected-route.tsx
-
-tsx
-'use client'
-
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { isAuthenticated } from '@/lib/auth'
-
-export default function ProtectedRoute({
-  children,
-  roles = [],
-}: {
-  children: React.ReactNode
-  roles?: string[]
-}) {
-  const router = useRouter()
-
-  useEffect(() => {
-    if (!isAuthenticated()) {
-      router.push('/auth/login')
-    }
-  }, [router])
-
-  // In a real app, you would also check the user's role here
-  // against the allowed roles passed as props
-
-  return <>{children}</>
-}
-6. Let's implement the job card component:
-src/components/jobs/job-card.tsx
-
-tsx
-import Link from 'next/link'
-import { Job } from '@/types/job.types'
-import { formatDistanceToNow } from 'date-fns'
-import { FiMapPin, FiClock, FiDollarSign, FiBriefcase } from 'react-icons/fi'
-import Badge from '../ui/badge'
-
-export default function JobCard({ job }: { job: Job }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition-all hover:shadow-md">
-      <div className="flex items-start justify-between">
+    <div className="max-w-md mx-auto bg-white p-8 rounded-lg shadow-md">
+      <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">Login</h2>
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <h3 className="text-lg font-medium text-gray-900">
-            <Link href={`/jobs/${job._id}`} className="hover:text-primary">
-              {job.title}
+          <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+            Email
+          </label>
+          <input
+            type="email"
+            id="email"
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+            Password
+          </label>
+          <input
+            type="password"
+            id="password"
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="text-sm">
+            <Link to="/forgot-password" className="font-medium text-primary-600 hover:text-primary-500">
+              Forgot password?
             </Link>
-          </h3>
-          <Link href={`/companies/${job.company._id}`} className="text-sm text-primary hover:underline">
-            {job.company.name}
-          </Link>
-        </div>
-        <Badge variant={job.type === 'full-time' ? 'primary' : 'secondary'}>
-          {job.type.replace('-', ' ')}
-        </Badge>
-      </div>
-
-      <div className="mt-4 space-y-2">
-        <div className="flex items-center text-sm text-gray-600">
-          <FiMapPin className="mr-1.5 h-4 w-4 flex-shrink-0" />
-          {job.location}
-        </div>
-        {job.salary && (
-          <div className="flex items-center text-sm text-gray-600">
-            <FiDollarSign className="mr-1.5 h-4 w-4 flex-shrink-0" />
-            ${job.salary.toLocaleString()} per year
           </div>
-        )}
-        <div className="flex items-center text-sm text-gray-600">
-          <FiClock className="mr-1.5 h-4 w-4 flex-shrink-0" />
-          Posted {formatDistanceToNow(new Date(job.createdAt))} ago
         </div>
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        {job.skills.slice(0, 3).map((skill) => (
-          <span
-            key={skill}
-            className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800"
-          >
-            {skill}
-          </span>
-        ))}
-        {job.skills.length > 3 && (
-          <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
-            +{job.skills.length - 3} more
-          </span>
-        )}
-      </div>
-
-      <div className="mt-6 flex items-center justify-between">
-        <span className="text-sm text-gray-500">
-          {job.applicants} applicant{job.applicants !== 1 ? 's' : ''}
-        </span>
-        <Link
-          href={`/jobs/${job._id}`}
-          className="text-sm font-medium text-primary hover:text-primary-dark"
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
         >
-          View details
+          {loading ? 'Logging in...' : 'Login'}
+        </button>
+      </form>
+      <div className="mt-4 text-center text-sm text-gray-600">
+        Don't have an account?{' '}
+        <Link to="/register" className="font-medium text-primary-600 hover:text-primary-500">
+          Register
         </Link>
       </div>
     </div>
-  )
-}
-7. Let's create the job form component:
-src/components/jobs/job-form.tsx
+  );
+};
 
-tsx
-import { useForm } from 'react-hook-form'
-import { yupResolver } from '@hookform/resolvers/yup'
-import * as yup from 'yup'
-import { Job } from '@/types/job.types'
-import { useEffect } from 'react'
-import { toast } from 'react-toastify'
+export default LoginForm;
+src/components/auth/RegisterForm.jsx
+jsx
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../../../context/AuthContext';
 
-const schema = yup.object().shape({
-  title: yup.string().required('Title is required'),
-  description: yup.string().required('Description is required'),
-  requirements: yup.array().of(yup.string()).min(1, 'At least one requirement is required'),
-  skills: yup.array().of(yup.string()).min(1, 'At least one skill is required'),
-  type: yup.string().required('Job type is required'),
-  location: yup.string().required('Location is required'),
-  salary: yup.number().typeError('Salary must be a number').positive('Salary must be positive').nullable(),
-  deadline: yup.date().required('Deadline is required').min(new Date(), 'Deadline must be in the future'),
-})
+const RegisterForm = () => {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'student',
+  });
+  const { register, loading } = useAuth();
 
-export default function JobForm({
-  job,
-  onSubmit,
-  isSubmitting,
-}: {
-  job?: Job
-  onSubmit: (data: any) => Promise<void>
-  isSubmitting: boolean
-}) {
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    setValue,
-    watch,
-    reset,
-  } = useForm({
-    resolver: yupResolver(schema),
-    defaultValues: job || {
-      requirements: [],
-      skills: [],
-    },
-  })
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
 
-  useEffect(() => {
-    if (job) {
-      reset(job)
-    }
-  }, [job, reset])
-
-  const handleSkillsChange = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && e.currentTarget.value) {
-      e.preventDefault()
-      const newSkill = e.currentTarget.value.trim()
-      if (!watch('skills')?.includes(newSkill)) {
-        setValue('skills', [...(watch('skills') || [], newSkill])
-        e.currentTarget.value = ''
-      }
-    }
-  }
-
-  const removeSkill = (skillToRemove: string) => {
-    setValue(
-      'skills',
-      watch('skills')?.filter((skill) => skill !== skillToRemove) || []
-    )
-  }
-
-  const handleRequirementsChange = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && e.currentTarget.value) {
-      e.preventDefault()
-      const newReq = e.currentTarget.value.trim()
-      if (!watch('requirements')?.includes(newReq)) {
-        setValue('requirements', [...(watch('requirements') || [], newReq])
-        e.currentTarget.value = ''
-      }
-    }
-  }
-
-  const removeRequirement = (reqToRemove: string) => {
-    setValue(
-      'requirements',
-      watch('requirements')?.filter((req) => req !== reqToRemove) || []
-    )
-  }
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    await register(formData);
+  };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      <div>
-        <label htmlFor="title" className="block text-sm font-medium text-gray-700">
-          Job Title*
-        </label>
-        <input
-          id="title"
-          type="text"
-          {...register('title')}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-        />
-        {errors.title && <p className="mt-1 text-sm text-danger">{errors.title.message}</p>}
-      </div>
-
-      <div>
-        <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-          Description*
-        </label>
-        <textarea
-          id="description"
-          rows={4}
-          {...register('description')}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-        />
-        {errors.description && <p className="mt-1 text-sm text-danger">{errors.description.message}</p>}
-      </div>
-
-      <div>
-        <label htmlFor="skills" className="block text-sm font-medium text-gray-700">
-          Skills*
-        </label>
-        <input
-          id="skills"
-          type="text"
-          onKeyDown={handleSkillsChange}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-          placeholder="Type a skill and press Enter"
-        />
-        <div className="mt-2 flex flex-wrap gap-2">
-          {watch('skills')?.map((skill) => (
-            <span
-              key={skill}
-              className="inline-flex items-center rounded-full bg-primary-100 px-2.5 py-0.5 text-xs font-medium text-primary-800"
-            >
-              {skill}
-              <button
-                type="button"
-                onClick={() => removeSkill(skill)}
-                className="ml-1.5 inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full text-primary-400 hover:bg-primary-200 hover:text-primary-500 focus:bg-primary-500 focus:text-white focus:outline-none"
-              >
-                <span className="sr-only">Remove skill</span>
-                <svg className="h-2 w-2" stroke="currentColor" fill="none" viewBox="0 0 8 8">
-                  <path strokeLinecap="round" strokeWidth="1.5" d="M1 1l6 6m0-6L1 7" />
-                </svg>
-              </button>
-            </span>
-          ))}
-        </div>
-        {errors.skills && <p className="mt-1 text-sm text-danger">{errors.skills.message}</p>}
-      </div>
-
-      <div>
-        <label htmlFor="requirements" className="block text-sm font-medium text-gray-700">
-          Requirements*
-        </label>
-        <input
-          id="requirements"
-          type="text"
-          onKeyDown={handleRequirementsChange}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-          placeholder="Type a requirement and press Enter"
-        />
-        <ul className="mt-2 list-inside list-disc space-y-1">
-          {watch('requirements')?.map((req) => (
-            <li key={req} className="flex items-center text-sm text-gray-600">
-              {req}
-              <button
-                type="button"
-                onClick={() => removeRequirement(req)}
-                className="ml-1.5 inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full text-gray-400 hover:bg-gray-200 hover:text-gray-500 focus:bg-gray-500 focus:text-white focus:outline-none"
-              >
-                <span className="sr-only">Remove requirement</span>
-                <svg className="h-2 w-2" stroke="currentColor" fill="none" viewBox="0 0 8 8">
-                  <path strokeLinecap="round" strokeWidth="1.5" d="M1 1l6 6m0-6L1 7" />
-                </svg>
-              </button>
-            </li>
-          ))}
-        </ul>
-        {errors.requirements && <p className="mt-1 text-sm text-danger">{errors.requirements.message}</p>}
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+    <div className="max-w-md mx-auto bg-white p-8 rounded-lg shadow-md">
+      <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">Register</h2>
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="type" className="block text-sm font-medium text-gray-700">
-            Job Type*
+          <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+            Full Name
+          </label>
+          <input
+            type="text"
+            id="name"
+            name="name"
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+            value={formData.name}
+            onChange={handleChange}
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+            Email
+          </label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+            value={formData.email}
+            onChange={handleChange}
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+            Password
+          </label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+            value={formData.password}
+            onChange={handleChange}
+            minLength="6"
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="role" className="block text-sm font-medium text-gray-700">
+            I am a
           </label>
           <select
-            id="type"
-            {...register('type')}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+            id="role"
+            name="role"
+            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"
+            value={formData.role}
+            onChange={handleChange}
           >
-            <option value="">Select a job type</option>
-            <option value="full-time">Full-time</option>
-            <option value="part-time">Part-time</option>
-            <option value="internship">Internship</option>
-            <option value="contract">Contract</option>
-            <option value="remote">Remote</option>
+            <option value="student">Student/Job Seeker</option>
+            <option value="employer">Employer</option>
           </select>
-          {errors.type && <p className="mt-1 text-sm text-danger">{errors.type.message}</p>}
         </div>
-
-        <div>
-          <label htmlFor="location" className="block text-sm font-medium text-gray-700">
-            Location*
-          </label>
-          <input
-            id="location"
-            type="text"
-            {...register('location')}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-          />
-          {errors.location && <p className="mt-1 text-sm text-danger">{errors.location.message}</p>}
-        </div>
-
-        <div>
-          <label htmlFor="salary" className="block text-sm font-medium text-gray-700">
-            Salary (optional)
-          </label>
-          <input
-            id="salary"
-            type="number"
-            {...register('salary')}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-          />
-          {errors.salary && <p className="mt-1 text-sm text-danger">{errors.salary.message}</p>}
-        </div>
-
-        <div>
-          <label htmlFor="deadline" className="block text-sm font-medium text-gray-700">
-            Application Deadline*
-          </label>
-          <input
-            id="deadline"
-            type="date"
-            {...register('deadline')}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-          />
-          {errors.deadline && <p className="mt-1 text-sm text-danger">{errors.deadline.message}</p>}
-        </div>
-      </div>
-
-      <div className="flex justify-end">
         <button
           type="submit"
-          disabled={isSubmitting}
-          className="inline-flex justify-center rounded-md border border-transparent bg-primary py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50"
+          disabled={loading}
+          className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
         >
-          {isSubmitting ? 'Saving...' : 'Save Job'}
+          {loading ? 'Registering...' : 'Register'}
         </button>
+      </form>
+      <div className="mt-4 text-center text-sm text-gray-600">
+        Already have an account?{' '}
+        <Link to="/login" className="font-medium text-primary-600 hover:text-primary-500">
+          Login
+        </Link>
       </div>
-    </form>
-  )
-}
-8. Let's implement the dashboard layout:
-src/app/(dashboard)/layout.tsx
+    </div>
+  );
+};
 
-tsx
-import { ReactNode } from 'react'
-import DashboardSidebar from '@/components/layout/sidebar'
-import DashboardHeader from '@/components/layout/header'
-import ProtectedRoute from '@/components/auth/protected-route'
+export default RegisterForm;
+src/components/layout/Navbar.jsx
+jsx
+import { Link, NavLink } from 'react-router-dom';
+import { useAuth } from '../../../context/AuthContext';
 
-export default function DashboardLayout({ children }: { children: ReactNode }) {
+const Navbar = () => {
+  const { user, isAuthenticated, logout } = useAuth();
+
   return (
-    <ProtectedRoute>
-      <div className="flex h-screen bg-gray-50">
-        <DashboardSidebar />
-        
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <DashboardHeader />
-          
-          <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
-            {children}
-          </main>
+    <nav className="bg-white shadow-sm">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between h-16">
+          <div className="flex">
+            <div className="flex-shrink-0 flex items-center">
+              <Link to="/" className="text-xl font-bold text-primary-600">
+                StageX
+              </Link>
+            </div>
+            <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
+              <NavLink
+                to="/jobs"
+                className={({ isActive }) => 
+                  `border-primary-500 text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
+                    isActive ? 'border-primary-500' : 'border-transparent hover:border-gray-300 hover:text-gray-700'
+                  }`
+                }
+              >
+                Jobs
+              </NavLink>
+              {isAuthenticated && user?.role === 'employer' && (
+                <NavLink
+                  to="/post-job"
+                  className={({ isActive }) => 
+                    `border-primary-500 text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
+                      isActive ? 'border-primary-500' : 'border-transparent hover:border-gray-300 hover:text-gray-700'
+                    }`
+                  }
+                >
+                  Post Job
+                </NavLink>
+              )}
+            </div>
+          </div>
+          <div className="hidden sm:ml-6 sm:flex sm:items-center">
+            {isAuthenticated ? (
+              <div className="ml-3 relative">
+                <div className="flex items-center space-x-4">
+                  <Link
+                    to="/dashboard"
+                    className="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm font-medium"
+                  >
+                    Dashboard
+                  </Link>
+                  <button
+                    onClick={logout}
+                    className="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm font-medium"
+                  >
+                    Logout
+                  </button>
+                  <Link
+                    to="/profile"
+                    className="flex items-center space-x-2"
+                  >
+                    <span className="text-gray-700 text-sm font-medium">
+                      {user?.name}
+                    </span>
+                    {user?.profile?.profilePicture ? (
+                      <img
+                        className="h-8 w-8 rounded-full"
+                        src={`${process.env.REACT_APP_API_URL}/uploads/${user.profile.profilePicture}`}
+                        alt="Profile"
+                      />
+                    ) : (
+                      <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center">
+                        <span className="text-primary-600 font-medium">
+                          {user?.name?.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                    )}
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className="flex space-x-4">
+                <Link
+                  to="/login"
+                  className="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Login
+                </Link>
+                <Link
+                  to="/register"
+                  className="bg-primary-600 hover:bg-primary-700 text-white px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Register
+                </Link>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </ProtectedRoute>
-  )
-}
-9. Let's create the job details page:
-src/app/jobs/[id]/page.tsx
+    </nav>
+  );
+};
 
-tsx
-import { notFound } from 'next/navigation'
-import { getJobById } from '@/lib/api'
-import JobDetails from '@/components/jobs/job-details'
-import ApplyJobButton from '@/components/jobs/apply-job-button'
-import { getCurrentUser } from '@/lib/auth'
+export default Navbar;
+src/components/layout/Footer.jsx
+jsx
+const Footer = () => {
+  return (
+    <footer className="bg-gray-800 text-white py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div>
+            <h3 className="text-lg font-semibold mb-4">StageX</h3>
+            <p className="text-gray-400">
+              Connecting students with top companies for internships and entry-level positions.
+            </p>
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
+            <ul className="space-y-2">
+              <li>
+                <a href="/jobs" className="text-gray-400 hover:text-white">
+                  Browse Jobs
+                </a>
+              </li>
+              <li>
+                <a href="/post-job" className="text-gray-400 hover:text-white">
+                  Post a Job
+                </a>
+              </li>
+              <li>
+                <a href="/about" className="text-gray-400 hover:text-white">
+                  About Us
+                </a>
+              </li>
+              <li>
+                <a href="/contact" className="text-gray-400 hover:text-white">
+                  Contact
+                </a>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Contact Us</h3>
+            <address className="text-gray-400 not-italic">
+              <p>123 University Ave</p>
+              <p>College Town, CA 12345</p>
+              <p>Email: info@stagex.com</p>
+              <p>Phone: (123) 456-7890</p>
+            </address>
+          </div>
+        </div>
+        <div className="mt-8 pt-8 border-t border-gray-700 text-center text-gray-400">
+          <p>&copy; {new Date().getFullYear()} StageX. All rights reserved.</p>
+        </div>
+      </div>
+    </footer>
+  );
+};
 
-export default async function JobPage({ params }: { params: { id: string } }) {
-  const job = await getJobById(params.id)
-  const user = await getCurrentUser()
+export default Footer;
+src/components/layout/Layout.jsx
+jsx
+import { Outlet } from 'react-router-dom';
+import Navbar from './Navbar';
+import Footer from './Footer';
 
-  if (!job) {
-    notFound()
-  }
+const Layout = () => {
+  return (
+    <div className="min-h-screen flex flex-col">
+      <Navbar />
+      <main className="flex-grow">
+        <Outlet />
+      </main>
+      <Footer />
+    </div>
+  );
+};
+
+export default Layout;
+2. Complete the src/pages/ directory:
+src/pages/Auth/Login.jsx
+jsx
+import LoginForm from '../../components/auth/LoginForm';
+
+const Login = () => {
+  return (
+    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md mx-auto">
+        <LoginForm />
+      </div>
+    </div>
+  );
+};
+
+export default Login;
+src/pages/Auth/Register.jsx
+jsx
+import RegisterForm from '../../components/auth/RegisterForm';
+
+const Register = () => {
+  return (
+    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md mx-auto">
+        <RegisterForm />
+      </div>
+    </div>
+  );
+};
+
+export default Register;
+src/pages/Profile/Profile.jsx
+jsx
+import { useState, useEffect } from 'react';
+import { useAuth } from '../../../context/AuthContext';
+import api from '../../../services/api';
+import FileUpload from '../../components/ui/FileUpload';
+
+const Profile = () => {
+  const { user } = useAuth();
+  const [profileData, setProfileData] = useState({
+    name: '',
+    email: '',
+    contactNumber: '',
+    location: '',
+    education: '',
+    skills: [],
+    bio: '',
+    experience: [],
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setProfileData({
+        name: user.name,
+        email: user.email,
+        contactNumber: user.profile?.contactNumber || '',
+        location: user.profile?.location || '',
+        education: user.profile?.education || '',
+        skills: user.profile?.skills || [],
+        bio: user.profile?.bio || '',
+        experience: user.profile?.experience || [],
+      });
+    }
+  }, [user]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setProfileData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSkillsChange = (e) => {
+    const skills = e.target.value.split(',').map(skill => skill.trim());
+    setProfileData(prev => ({ ...prev, skills }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    
+    try {
+      await api.put(`/users/${user._id}`, {
+        name: profileData.name,
+        profile: {
+          contactNumber: profileData.contactNumber,
+          location: profileData.location,
+          education: profileData.education,
+          skills: profileData.skills,
+          bio: profileData.bio,
+          experience: profileData.experience,
+        }
+      });
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to update profile');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFileUpload = async (file) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      await api.put(`/users/${user._id}/photo`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      window.location.reload();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to upload photo');
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-      <JobDetails job={job} />
-      
-      {user?.role === 'student' && (
-        <div className="mt-8">
-          <ApplyJobButton jobId={job._id} />
-        </div>
-      )}
-    </div>
-  )
-}
-10. Let's implement the type definitions:
-src/types/job.types.ts
-
-typescript
-export interface Job {
-  _id: string
-  title: string
-  description: string
-  requirements: string[]
-  skills: string[]
-  type: 'full-time' | 'part-time' | 'internship' | 'contract' | 'remote'
-  location: string
-  salary?: number
-  isActive: boolean
-  postedBy: string
-  company: {
-    _id: string
-    name: string
-    profile?: {
-      companyLogo?: string
-    }
-  }
-  createdAt: string
-  deadline: string
-  applicants: number
-  applications?: Application[]
-}
-src/types/user.types.ts
-
-typescript
-export interface User {
-  _id: string
-  name: string
-  email: string
-  role: 'student' | 'employer' | 'admin'
-  profile?: {
-    education?: string
-    skills?: string[]
-    resume?: string
-    profilePicture?: string
-    contactNumber?: string
-    location?: string
-    website?: string
-    bio?: string
-    experience?: Experience[]
-    companyLogo?: string
-  }
-  company?: {
-    name: string
-    description?: string
-    website?: string
-    logo?: string
-    address?: string
-    size?: string
-    industry?: string
-  }
-  createdAt: string
-}
-
-interface Experience {
-  title: string
-  company: string
-  location: string
-  from: string
-  to?: string
-  current: boolean
-  description?: string
-}
-
-
-src/components/applications/application-status.tsx
-
-tsx
-import { ApplicationStatus } from '@/types/application.types'
-import { cn } from '@/lib/utils'
-
-const statusMap = {
-  pending: {
-    label: 'Pending',
-    color: 'bg-gray-100 text-gray-800',
-  },
-  reviewed: {
-    label: 'Reviewed',
-    color: 'bg-blue-100 text-blue-800',
-  },
-  shortlisted: {
-    label: 'Shortlisted',
-    color: 'bg-purple-100 text-purple-800',
-  },
-  rejected: {
-    label: 'Rejected',
-    color: 'bg-red-100 text-red-800',
-  },
-  hired: {
-    label: 'Hired',
-    color: 'bg-green-100 text-green-800',
-  },
-}
-
-export default function ApplicationStatusBadge({
-  status,
-  className,
-}: {
-  status: ApplicationStatus
-  className?: string
-}) {
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-        statusMap[status].color,
-        className
-      )}
-    >
-      {statusMap[status].label}
-    </span>
-  )
-}
-2. Job Filters Component
-src/components/jobs/job-filters.tsx
-
-tsx
-import { useState } from 'react'
-import { JobType } from '@/types/job.types'
-
-const jobTypes: JobType[] = [
-  'full-time',
-  'part-time',
-  'internship',
-  'contract',
-  'remote',
-]
-
-export default function JobFilters({
-  onFilterChange,
-}: {
-  onFilterChange: (filters: {
-    search: string
-    types: JobType[]
-    location: string
-  }) => void
-}) {
-  const [search, setSearch] = useState('')
-  const [selectedTypes, setSelectedTypes] = useState<JobType[]>([])
-  const [location, setLocation] = useState('')
-
-  const handleTypeToggle = (type: JobType) => {
-    setSelectedTypes((prev) =>
-      prev.includes(type)
-        ? prev.filter((t) => t !== type)
-        : [...prev, type]
-    )
-  }
-
-  const applyFilters = () => {
-    onFilterChange({
-      search,
-      types: selectedTypes,
-      location,
-    })
-  }
-
-  const resetFilters = () => {
-    setSearch('')
-    setSelectedTypes([])
-    setLocation('')
-    onFilterChange({ search: '', types: [], location: '' })
-  }
-
-  return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="space-y-4">
-        <div>
-          <label htmlFor="search" className="block text-sm font-medium text-gray-700">
-            Keywords
-          </label>
-          <input
-            type="text"
-            id="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-            placeholder="Job title, skills, etc."
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Job Type</label>
-          <div className="mt-2 space-y-2">
-            {jobTypes.map((type) => (
-              <div key={type} className="flex items-center">
-                <input
-                  id={`type-${type}`}
-                  type="checkbox"
-                  checked={selectedTypes.includes(type)}
-                  onChange={() => handleTypeToggle(type)}
-                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                />
-                <label
-                  htmlFor={`type-${type}`}
-                  className="ml-2 block text-sm text-gray-700 capitalize"
-                >
-                  {type.replace('-', ' ')}
-                </label>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <label htmlFor="location" className="block text-sm font-medium text-gray-700">
-            Location
-          </label>
-          <input
-            type="text"
-            id="location"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-            placeholder="City, state, or remote"
-          />
-        </div>
-
-        <div className="flex space-x-3 pt-2">
-          <button
-            type="button"
-            onClick={applyFilters}
-            className="inline-flex justify-center rounded-md border border-transparent bg-primary py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-          >
-            Apply Filters
-          </button>
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="inline-flex justify-center rounded-md border border-gray-300 bg-white py-2 px-4 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-          >
-            Reset
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-3. User Profile Form
-src/components/profile/profile-form.tsx
-
-tsx
-import { useForm } from 'react-hook-form'
-import { yupResolver } from '@hookform/resolvers/yup'
-import * as yup from 'yup'
-import { User } from '@/types/user.types'
-import { toast } from 'react-toastify'
-import { updateUserProfile } from '@/lib/api/user'
-
-const schema = yup.object().shape({
-  name: yup.string().required('Name is required'),
-  email: yup.string().email('Invalid email').required('Email is required'),
-  profile: yup.object().shape({
-    contactNumber: yup.string().nullable(),
-    location: yup.string().nullable(),
-    website: yup.string().url('Invalid URL').nullable(),
-    bio: yup.string().nullable(),
-  }),
-})
-
-export default function ProfileForm({ user }: { user: User }) {
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm({
-    resolver: yupResolver(schema),
-    defaultValues: {
-      name: user.name,
-      email: user.email,
-      profile: {
-        contactNumber: user.profile?.contactNumber || '',
-        location: user.profile?.location || '',
-        website: user.profile?.website || '',
-        bio: user.profile?.bio || '',
-      },
-    },
-  })
-
-  const onSubmit = async (data: Partial<User>) => {
-    try {
-      await updateUserProfile(data)
-      toast.success('Profile updated successfully!')
-    } catch (error) {
-      toast.error(error.message || 'Failed to update profile')
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-        <div>
-          <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-            Full Name*
-          </label>
-          <input
-            id="name"
-            type="text"
-            {...register('name')}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-          />
-          {errors.name && <p className="mt-1 text-sm text-danger">{errors.name.message}</p>}
-        </div>
-
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-            Email*
-          </label>
-          <input
-            id="email"
-            type="email"
-            {...register('email')}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-          />
-          {errors.email && <p className="mt-1 text-sm text-danger">{errors.email.message}</p>}
-        </div>
-
-        <div>
-          <label htmlFor="contactNumber" className="block text-sm font-medium text-gray-700">
-            Phone Number
-          </label>
-          <input
-            id="contactNumber"
-            type="tel"
-            {...register('profile.contactNumber')}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="location" className="block text-sm font-medium text-gray-700">
-            Location
-          </label>
-          <input
-            id="location"
-            type="text"
-            {...register('profile.location')}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-          />
-        </div>
-      </div>
-
-      <div>
-        <label htmlFor="website" className="block text-sm font-medium text-gray-700">
-          Website
-        </label>
-        <input
-          id="website"
-          type="url"
-          {...register('profile.website')}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-          placeholder="https://example.com"
-        />
-        {errors.profile?.website && (
-          <p className="mt-1 text-sm text-danger">{errors.profile.website.message}</p>
-        )}
-      </div>
-
-      <div>
-        <label htmlFor="bio" className="block text-sm font-medium text-gray-700">
-          Bio
-        </label>
-        <textarea
-          id="bio"
-          rows={4}
-          {...register('profile.bio')}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-        />
-      </div>
-
-      <div className="flex justify-end">
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="inline-flex justify-center rounded-md border border-transparent bg-primary py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50"
-        >
-          {isSubmitting ? 'Saving...' : 'Save Changes'}
-        </button>
-      </div>
-    </form>
-  )
-}
-4. Dashboard Stats Cards
-src/components/dashboard/stats-card.tsx
-
-tsx
-import { ReactNode } from 'react'
-import { cn } from '@/lib/utils'
-
-export default function StatsCard({
-  title,
-  value,
-  icon,
-  trend,
-  className,
-}: {
-  title: string
-  value: string | number
-  icon: ReactNode
-  trend?: {
-    value: string
-    type: 'up' | 'down'
-  }
-  className?: string
-}) {
-  return (
-    <div
-      className={cn(
-        'rounded-lg border border-gray-200 bg-white p-6 shadow-sm',
-        className
-      )}
-    >
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-gray-500">{title}</p>
-          <p className="mt-1 text-2xl font-semibold text-gray-900">{value}</p>
-        </div>
-        <div className="rounded-full bg-primary-100 p-3 text-primary-600">
-          {icon}
-        </div>
-      </div>
-      {trend && (
-        <div
-          className={cn(
-            'mt-4 flex items-center text-sm',
-            trend.type === 'up' ? 'text-green-600' : 'text-red-600'
-          )}
-        >
-          {trend.type === 'up' ? (
-            <svg
-              className="mr-1 h-4 w-4"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                fillRule="evenodd"
-                d="M12 7a1 1 0 01-1 1H9v1h2a1 1 0 110 2H9v1h2a1 1 0 110 2H9v1a1 1 0 11-2 0v-1H5a1 1 0 110-2h2v-1H5a1 1 0 110-2h2V8H5a1 1 0 010-2h2V5a1 1 0 112 0v1h2a1 1 0 011 1z"
-                clipRule="evenodd"
-              />
-            </svg>
-          ) : (
-            <svg
-              className="mr-1 h-4 w-4"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                fillRule="evenodd"
-                d="M5 10a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1z"
-                clipRule="evenodd"
-              />
-            </svg>
-          )}
-          <span>{trend.value}</span>
-        </div>
-      )}
-    </div>
-  )
-}
-5. Company Dashboard Page
-src/app/(company)/company/dashboard/page.tsx
-
-tsx
-import { getCurrentUser } from '@/lib/auth'
-import { getCompanyJobs, getCompanyApplications } from '@/lib/api/company'
-import StatsCard from '@/components/dashboard/stats-card'
-import { FiBriefcase, FiUsers, FiDollarSign, FiActivity } from 'react-icons/fi'
-import RecentApplications from '@/components/applications/recent-applications'
-import CompanyJobsList from '@/components/companies/company-jobs-list'
-
-export default async function CompanyDashboardPage() {
-  const user = await getCurrentUser()
-  const jobs = await getCompanyJobs()
-  const applications = await getCompanyApplications()
-
-  if (!user || user.role !== 'employer') {
-    return <div>Unauthorized</div>
-  }
-
-  const stats = [
-    {
-      title: 'Active Jobs',
-      value: jobs.filter(job => job.isActive).length,
-      icon: <FiBriefcase className="h-6 w-6" />,
-    },
-    {
-      title: 'Total Applications',
-      value: applications.length,
-      icon: <FiUsers className="h-6 w-6" />,
-    },
-    {
-      title: 'Hired Candidates',
-      value: applications.filter(app => app.status === 'hired').length,
-      icon: <FiDollarSign className="h-6 w-6" />,
-    },
-    {
-      title: 'Pending Reviews',
-      value: applications.filter(app => app.status === 'pending').length,
-      icon: <FiActivity className="h-6 w-6" />,
-    },
-  ]
-
-  return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Company Dashboard</h1>
-      
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat, index) => (
-          <StatsCard
-            key={index}
-            title={stat.title}
-            value={stat.value}
-            icon={stat.icon}
-          />
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div>
-          <h2 className="mb-4 text-lg font-medium text-gray-900">Recent Applications</h2>
-          <RecentApplications applications={applications.slice(0, 5)} />
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-2xl font-semibold text-gray-800">Profile</h2>
         </div>
         
-        <div>
-          <h2 className="mb-4 text-lg font-medium text-gray-900">Active Job Postings</h2>
-          <CompanyJobsList jobs={jobs.filter(job => job.isActive).slice(0, 5)} />
+        <div className="p-6">
+          {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+              Profile updated successfully!
+            </div>
+          )}
+          
+          <div className="flex flex-col md:flex-row gap-8">
+            <div className="md:w-1/3">
+              <div className="flex flex-col items-center">
+                {user?.profile?.profilePicture ? (
+                  <img
+                    src={`${process.env.REACT_APP_API_URL}/uploads/${user.profile.profilePicture}`}
+                    alt="Profile"
+                    className="h-32 w-32 rounded-full object-cover mb-4"
+                  />
+                ) : (
+                  <div className="h-32 w-32 rounded-full bg-primary-100 flex items-center justify-center mb-4">
+                    <span className="text-primary-600 text-4xl font-bold">
+                      {user?.name?.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                )}
+                <FileUpload
+                  accept="image/*"
+                  onFileChange={handleFileUpload}
+                  label="Change Photo"
+                  buttonClass="text-sm"
+                />
+                <div className="mt-4 text-center">
+                  <h3 className="text-lg font-medium text-gray-800">{user?.name}</h3>
+                  <p className="text-gray-600 capitalize">{user?.role}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="md:w-2/3">
+              <form onSubmit={handleSubmit}>
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                      Full Name
+                    </label>
+                    <input
+                      type="text"
+                      id="name"
+                      name="name"
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                      value={profileData.name}
+                      onChange={handleChange}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      id="email"
+                      name="email"
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 bg-gray-100"
+                      value={profileData.email}
+                      readOnly
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="contactNumber" className="block text-sm font-medium text-gray-700">
+                      Phone Number
+                    </label>
+                    <input
+                      type="text"
+                      id="contactNumber"
+                      name="contactNumber"
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                      value={profileData.contactNumber}
+                      onChange={handleChange}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="location" className="block text-sm font-medium text-gray-700">
+                      Location
+                    </label>
+                    <input
+                      type="text"
+                      id="location"
+                      name="location"
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                      value={profileData.location}
+                      onChange={handleChange}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label htmlFor="education" className="block text-sm font-medium text-gray-700">
+                      Education
+                    </label>
+                    <input
+                      type="text"
+                      id="education"
+                      name="education"
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                      value={profileData.education}
+                      onChange={handleChange}
+                      placeholder="e.g., BSc Computer Science, University of Example"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label htmlFor="skills" className="block text-sm font-medium text-gray-700">
+                      Skills (comma separated)
+                    </label>
+                    <input
+                      type="text"
+                      id="skills"
+                      name="skills"
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                      value={profileData.skills.join(', ')}
+                      onChange={handleSkillsChange}
+                      placeholder="e.g., JavaScript, React, Node.js"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label htmlFor="bio" className="block text-sm font-medium text-gray-700">
+                      Bio
+                    </label>
+                    <textarea
+                      id="bio"
+                      name="bio"
+                      rows="3"
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                      value={profileData.bio}
+                      onChange={handleChange}
+                    />
+                  </div>
+                </div>
+                
+                <div className="mt-8 flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+                  >
+                    {loading ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
         </div>
       </div>
     </div>
-  )
-}
-6. API Utility Functions
-src/lib/api/job.ts
+  );
+};
 
-typescript
-import api from '../api'
+export default Profile;
+3. Complete the src/context/ directory:
+src/context/JobContext.jsx
+jsx
+import { createContext, useContext, useState, useEffect } from 'react';
+import api from '../../services/api';
 
-export const getJobs = async (filters = {}) => {
-  const response = await api.get('/jobs', { params: filters })
-  return response.data.data
-}
+const JobContext = createContext();
 
-export const getJobById = async (id: string) => {
-  try {
-    const response = await api.get(`/jobs/${id}`)
-    return response.data.data
-  } catch (error) {
-    if (error.response?.status === 404) {
-      return null
+export const JobProvider = ({ children }) => {
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchJobs = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/jobs');
+      setJobs(res.data.data);
+      setLoading(false);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to fetch jobs');
+      setLoading(false);
     }
-    throw error
-  }
-}
-
-export const createJob = async (jobData: any) => {
-  const response = await api.post('/jobs', jobData)
-  return response.data.data
-}
-
-export const updateJob = async (id: string, jobData: any) => {
-  const response = await api.put(`/jobs/${id}`, jobData)
-  return response.data.data
-}
-
-export const deleteJob = async (id: string) => {
-  await api.delete(`/jobs/${id}`)
-}
-src/lib/api/application.ts
-
-typescript
-import api from '../api'
-import { Application } from '@/types/application.types'
-
-export const getApplications = async (): Promise<Application[]> => {
-  const response = await api.get('/applications')
-  return response.data.data
-}
-
-export const getApplicationById = async (id: string): Promise<Application> => {
-  const response = await api.get(`/applications/${id}`)
-  return response.data.data
-}
-
-export const createApplication = async (jobId: string, applicationData: any) => {
-  const response = await api.post(`/jobs/${jobId}/applications`, applicationData)
-  return response.data.data
-}
-
-export const updateApplicationStatus = async (
-  id: string,
-  status: string
-): Promise<Application> => {
-  const response = await api.put(`/applications/${id}/status`, { status })
-  return response.data.data
-}
-
-export const deleteApplication = async (id: string) => {
-  await api.delete(`/applications/${id}`)
-}
-7. Custom Hooks
-src/hooks/useAuth.ts
-
-typescript
-import { useState, useEffect } from 'react'
-import { getCurrentUser } from '@/lib/auth'
-import { User } from '@/types/user.types'
-
-export default function useAuth() {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
+  };
 
   useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const currentUser = await getCurrentUser()
-        setUser(currentUser)
-      } catch (error) {
-        setUser(null)
-      } finally {
-        setLoading(false)
+    fetchJobs();
+  }, []);
+
+  return (
+    <JobContext.Provider
+      value={{
+        jobs,
+        loading,
+        error,
+        fetchJobs,
+      }}
+    >
+      {children}
+    </JobContext.Provider>
+  );
+};
+
+export const useJobs = () => useContext(JobContext);
+4. Complete the src/hooks/ directory:
+src/hooks/useForm.js
+js
+import { useState } from 'react';
+
+const useForm = (initialValues, validate) => {
+  const [values, setValues] = useState(initialValues);
+  const [errors, setErrors] = useState({});
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setValues({
+      ...values,
+      [name]: value,
+    });
+  };
+
+  const handleSubmit = (callback) => (e) => {
+    e.preventDefault();
+    if (validate) {
+      const validationErrors = validate(values);
+      setErrors(validationErrors);
+      if (Object.keys(validationErrors).length === 0) {
+        callback();
       }
+    } else {
+      callback();
     }
-
-    fetchUser()
-  }, [])
-
-  return { user, loading }
-}
-src/hooks/useApi.ts
-
-typescript
-import { useState } from 'react'
-import api from '@/lib/api'
-
-export default function useApi() {
-  const [data, setData] = useState<any>(null)
-  const [error, setError] = useState<any>(null)
-  const [loading, setLoading] = useState(false)
-
-  const request = async (method: string, url: string, data = {}) => {
-    setLoading(true)
-    try {
-      const response = await api[method](url, data)
-      setData(response.data)
-      return response.data
-    } catch (err) {
-      setError(err)
-      throw err
-    } finally {
-      setLoading(false)
-    }
-  }
+  };
 
   return {
-    data,
-    error,
-    loading,
-    get: (url: string) => request('get', url),
-    post: (url: string, data: any) => request('post', url, data),
-    put: (url: string, data: any) => request('put', url, data),
-    delete: (url: string) => request('delete', url),
-  }
-}
-8. Utility Functions
-src/lib/utils.ts
+    values,
+    errors,
+    handleChange,
+    handleSubmit,
+  };
+};
 
-typescript
-export function cn(...inputs: any[]) {
-  return inputs.filter(Boolean).join(' ')
-}
+export default useForm;
+5. Complete the src/utils/ directory:
+src/utils/formatDate.js
+js
+import { formatDistanceToNow, parseISO } from 'date-fns';
 
-export function formatDate(dateString: string) {
+export const formatDate = (dateString) => {
+  return formatDistanceToNow(parseISO(dateString), { addSuffix: true });
+};
+
+export const formatFullDate = (dateString) => {
   return new Date(dateString).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-  })
+  });
+};
+6. Complete the src/styles/ directory:
+src/styles/index.css
+css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles */
+body {
+  @apply bg-gray-50;
 }
 
-export function truncate(text: string, length: number) {
-  return text.length > length ? `${text.substring(0, length)}...` : text
+/* Custom button styles */
+.btn-primary {
+  @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded transition duration-200;
 }
 
-export function capitalize(str: string) {
-  return str.charAt(0).toUpperCase() + str.slice(1)
+.btn-outline {
+  @apply border border-gray-300 hover:border-gray-400 text-gray-700 font-medium py-2 px-4 rounded transition duration-200;
 }
 
-export function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(amount)
+/* Form input styles */
+.input-field {
+  @apply w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500;
 }
 
-
-src/components/forms/file-upload.tsx
-
-tsx
-import { useState, useCallback } from 'react'
-import { useDropzone } from 'react-dropzone'
-import { FiUpload, FiX } from 'react-icons/fi'
-import { toast } from 'react-toastify'
-
-interface FileUploadProps {
-  onUpload: (file: File) => Promise<void>
-  accept?: string
-  maxSize?: number
-  label?: string
-  className?: string
+/* Card styles */
+.card {
+  @apply bg-white rounded-lg shadow-md overflow-hidden;
 }
 
-export default function FileUpload({
-  onUpload,
-  accept = 'image/*,.pdf',
-  maxSize = 5 * 1024 * 1024, // 5MB
-  label = 'Drag & drop file here, or click to select',
-  className,
-}: FileUploadProps) {
-  const [isUploading, setIsUploading] = useState(false)
-  const [file, setFile] = useState<File | null>(null)
-  const [preview, setPreview] = useState<string | null>(null)
-
-  const onDrop = useCallback(
-    (acceptedFiles: File[]) => {
-      const selectedFile = acceptedFiles[0]
-      if (!selectedFile) return
-
-      if (selectedFile.size > maxSize) {
-        toast.error(`File size exceeds ${maxSize / 1024 / 1024}MB limit`)
-        return
-      }
-
-      setFile(selectedFile)
-
-      // Create preview for images
-      if (selectedFile.type.startsWith('image/')) {
-        const reader = new FileReader()
-        reader.onload = () => setPreview(reader.result as string)
-        reader.readAsDataURL(selectedFile)
-      }
-    },
-    [maxSize]
-  )
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: accept.split(',').reduce((acc, type) => ({ ...acc, [type]: [] }), {}),
-    maxFiles: 1,
-  })
-
-  const handleUpload = async () => {
-    if (!file) return
-    try {
-      setIsUploading(true)
-      await onUpload(file)
-      setFile(null)
-      setPreview(null)
-      toast.success('File uploaded successfully!')
-    } catch (error) {
-      toast.error(error.message || 'Failed to upload file')
-    } finally {
-      setIsUploading(false)
-    }
-  }
-
-  const removeFile = () => {
-    setFile(null)
-    setPreview(null)
-  }
-
-  return (
-    <div className={className}>
-      {!file ? (
-        <div
-          {...getRootProps()}
-          className={`flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 text-center ${
-            isDragActive ? 'border-primary bg-primary-50' : 'border-gray-300'
-          }`}
-        >
-          <input {...getInputProps()} />
-          <FiUpload className="mb-2 h-8 w-8 text-gray-400" />
-          <p className="text-sm text-gray-600">{label}</p>
-          <p className="mt-1 text-xs text-gray-500">
-            {accept.includes('image') ? 'PNG, JPG, GIF' : ''}{' '}
-            {accept.includes('.pdf') ? 'PDF' : ''} up to {maxSize / 1024 / 1024}MB
-          </p>
-        </div>
-      ) : (
-        <div className="rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              {preview ? (
-                <img
-                  src={preview}
-                  alt="Preview"
-                  className="h-12 w-12 rounded-md object-cover"
-                />
-              ) : (
-                <div className="flex h-12 w-12 items-center justify-center rounded-md bg-gray-100">
-                  <FiUpload className="h-5 w-5 text-gray-400" />
-                </div>
-              )}
-              <div>
-                <p className="text-sm font-medium text-gray-900">{file.name}</p>
-                <p className="text-xs text-gray-500">
-                  {(file.size / 1024).toFixed(1)} KB
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={removeFile}
-              className="text-gray-400 hover:text-gray-500"
-            >
-              <FiX className="h-5 w-5" />
-            </button>
-          </div>
-          <div className="mt-4 flex justify-end">
-            <button
-              type="button"
-              onClick={handleUpload}
-              disabled={isUploading}
-              className="inline-flex items-center rounded-md border border-transparent bg-primary px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50"
-            >
-              {isUploading ? 'Uploading...' : 'Upload File'}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-2. Real-Time Notifications System
-src/lib/socket.ts
-
-typescript
-import io from 'socket.io-client'
-import { getToken } from './auth'
-
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000'
-
-let socket: any = null
-
-export const connectSocket = () => {
-  if (!socket) {
-    socket = io(SOCKET_URL, {
-      auth: {
-        token: getToken(),
-      },
-      transports: ['websocket'],
-    })
-  }
-  return socket
+/* Alert styles */
+.alert-success {
+  @apply bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded;
 }
 
-export const disconnectSocket = () => {
-  if (socket) {
-    socket.disconnect()
-    socket = null
-  }
+.alert-error {
+  @apply bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded;
 }
+7. Complete the root files:
+src/index.js
+jsx
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './styles/index.css';
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+public/index.html
+html
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="StageX - Job Portal for Students" />
+    <title>StageX - Job Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
 
-export const getSocket = () => {
-  if (!socket) {
-    throw new Error('Socket not connected. Call connectSocket first.')
-  }
-  return socket
-}
-src/hooks/useNotifications.ts
 
-typescript
-import { useEffect } from 'react'
-import { toast } from 'react-toastify'
-import { connectSocket, getSocket } from '@/lib/socket'
-import { useAuth } from './useAuth'
-
-export default function useNotifications() {
-  const { user } = useAuth()
-
-  useEffect(() => {
-    if (!user) return
-
-    // Connect to socket
-    connectSocket()
-    const socket = getSocket()
-
-    // Listen for notifications
-    socket.on('notification', (data: { message: string; type: string }) => {
-      toast[data.type](data.message)
-    })
-
-    // Listen for application updates
-    socket.on('application:updated', (data: { jobTitle: string; status: string }) => {
-      toast.info(`Your application for "${data.jobTitle}" is now ${data.status}`)
-    })
-
-    // Clean up on unmount
-    return () => {
-      socket.off('notification')
-      socket.off('application:updated')
-    }
-  }, [user])
-}
-3. Admin Dashboard Components
-src/components/admin/user-table.tsx
-
-tsx
-import { User } from '@/types/user.types'
-import { FiEdit2, FiTrash2 } from 'react-icons/fi'
-import { useState } from 'react'
-import ConfirmationModal from '../ui/confirmation-modal'
-import { deleteUser } from '@/lib/api/user'
-import { toast } from 'react-toastify'
-import Link from 'next/link'
-
-interface UserTableProps {
-  users: User[]
-  onDelete: (id: string) => void
-}
-
-export default function UserTable({ users, onDelete }: UserTableProps) {
-  const [userToDelete, setUserToDelete] = useState<string | null>(null)
-  const [isDeleting, setIsDeleting] = useState(false)
-
-  const handleDelete = async () => {
-    if (!userToDelete) return
-    try {
-      setIsDeleting(true)
-      await deleteUser(userToDelete)
-      onDelete(userToDelete)
-      toast.success('User deleted successfully')
-    } catch (error) {
-      toast.error(error.message || 'Failed to delete user')
-    } finally {
-      setIsDeleting(false)
-      setUserToDelete(null)
-    }
-  }
-
-  return (
-    <>
-      <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                Name
-              </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                Email
-              </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                Role
-              </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                Joined
-              </th>
-              <th scope="col" className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200 bg-white">
-            {users.map((user) => (
-              <tr key={user._id}>
-                <td className="whitespace-nowrap px-6 py-4">
-                  <div className="flex items-center">
-                    <div className="h-10 w-10 flex-shrink-0">
-                      <img
-                        className="h-10 w-10 rounded-full"
-                        src={user.profile?.profilePicture || '/images/default-avatar.png'}
-                        alt=""
-                      />
-                    </div>
-                    <div className="ml-4">
-                      <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="whitespace-nowrap px-6 py-4">
-                  <div className="text-sm text-gray-500">{user.email}</div>
-                </td>
-                <td className="whitespace-nowrap px-6 py-4">
-                  <span className="inline-flex rounded-full bg-primary-100 px-2 text-xs font-semibold leading-5 text-primary-800 capitalize">
-                    {user.role}
-                  </span>
-                </td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                  {new Date(user.createdAt).toLocaleDateString()}
-                </td>
-                <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-medium">
-                  <Link
-                    href={`/admin/users/${user._id}`}
-                    className="mr-3 inline-flex items-center text-primary-600 hover:text-primary-900"
-                  >
-                    <FiEdit2 className="mr-1 h-4 w-4" /> Edit
-                  </Link>
-                  <button
-                    onClick={() => setUserToDelete(user._id)}
-                    className="inline-flex items-center text-danger-600 hover:text-danger-900"
-                  >
-                    <FiTrash2 className="mr-1 h-4 w-4" /> Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <ConfirmationModal
-        isOpen={!!userToDelete}
-        onClose={() => setUserToDelete(null)}
-        onConfirm={handleDelete}
-        title="Delete User"
-        message="Are you sure you want to delete this user? This action cannot be undone."
-        confirmText={isDeleting ? 'Deleting...' : 'Delete'}
-        confirmColor="danger"
-      />
-    </>
-  )
-}
-4. Testing Setup
-jest.config.js
-
-javascript
-module.exports = {
-  preset: 'ts-jest',
-  testEnvironment: 'jsdom',
-  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
-  moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/src/$1',
-    '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
-    '\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$':
-      '<rootDir>/__mocks__/fileMock.js',
-  },
-  testPathIgnorePatterns: ['<rootDir>/node_modules/', '<rootDir>/.next/'],
-  transform: {
-    '^.+\\.(js|jsx|ts|tsx)$': ['babel-jest', { presets: ['next/babel'] }],
-  },
-  collectCoverageFrom: [
-    'src/**/*.{ts,tsx}',
-    '!src/**/*.d.ts',
-    '!src/**/*.stories.tsx',
-    '!src/**/index.ts',
-    '!src/pages/**',
-    '!src/styles/**',
-    '!src/types/**',
-  ],
-}
-cypress.config.ts
-
-typescript
-import { defineConfig } from 'cypress'
-
-export default defineConfig({
-  e2e: {
-    baseUrl: 'http://localhost:3000',
-    setupNodeEvents(on, config) {
-      // implement node event listeners here
-    },
-  },
-  env: {
-    apiUrl: 'http://localhost:5000/api',
-    adminEmail: 'admin@example.com',
-    adminPassword: 'password123',
-    studentEmail: 'student@example.com',
-    studentPassword: 'password123',
-    employerEmail: 'employer@example.com',
-    employerPassword: 'password123',
-  },
-})
-5. Deployment Configuration
-next.config.js
-
-javascript
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  reactStrictMode: true,
-  images: {
-    domains: [
-      'localhost',
-      'job-portal-bucket.s3.amazonaws.com',
-      'your-production-domain.com',
-    ],
-  },
-  async headers() {
-    return [
-      {
-        source: '/api/:path*',
-        headers: [
-          { key: 'Access-Control-Allow-Credentials', value: 'true' },
-          { key: 'Access-Control-Allow-Origin', value: '*' },
-          {
-            key: 'Access-Control-Allow-Methods',
-            value: 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
-          },
-          {
-            key: 'Access-Control-Allow-Headers',
-            value:
-              'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version',
-          },
-        ],
-      },
-    ]
-  },
-}
-
-module.exports = nextConfig
-6. State Management with Zustand
-src/store/auth-store.ts
-
-typescript
-import { create } from 'zustand'
-import { User } from '@/types/user.types'
-import { getCurrentUser } from '@/lib/auth'
-
-interface AuthState {
-  user: User | null
-  loading: boolean
-  error: string | null
-  login: (email: string, password: string) => Promise<void>
-  register: (userData: {
-    name: string
-    email: string
-    password: string
-    role: string
-  }) => Promise<void>
-  logout: () => void
-  fetchUser: () => Promise<void>
-}
-
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  loading: false,
-  error: null,
-
-  login: async (email, password) => {
-    set({ loading: true, error: null })
-    try {
-      const { token, role } = await login({ email, password })
-      localStorage.setItem('token', token)
-      const user = await getCurrentUser()
-      set({ user, loading: false })
-    } catch (error) {
-      set({ error: error.message, loading: false })
-      throw error
-    }
-  },
-
-  register: async (userData) => {
-    set({ loading: true, error: null })
-    try {
-      const { token, role } = await register(userData)
-      localStorage.setItem('token', token)
-      const user = await getCurrentUser()
-      set({ user, loading: false })
-    } catch (error) {
-      set({ error: error.message, loading: false })
-      throw error
-    }
-  },
-
-  logout: () => {
-    localStorage.removeItem('token')
-    set({ user: null })
-  },
-
-  fetchUser: async () => {
-    set({ loading: true })
-    try {
-      const user = await getCurrentUser()
-      set({ user, loading: false })
-    } catch (error) {
-      set({ error: error.message, loading: false })
-    }
-  },
-}))
-7. API Route for File Uploads
-src/app/api/upload/route.ts
-
-typescript
-import { NextResponse } from 'next/server'
-import { getToken } from 'next-auth/jwt'
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
-
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
-})
-
-export async function POST(req: Request) {
-  try {
-    const token = await getToken({ req })
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { fileName, fileType } = await req.json()
-
-    if (!fileName || !fileType) {
-      return NextResponse.json(
-        { error: 'Missing fileName or fileType' },
-        { status: 400 }
-      )
-    }
-
-    const fileKey = `uploads/${Date.now()}-${fileName}`
-
-    const putObjectCommand = new PutObjectCommand({
-      Bucket: process.env.AWS_BUCKET_NAME!,
-      Key: fileKey,
-      ContentType: fileType,
-    })
-
-    const signedUrl = await getSignedUrl(s3Client, putObjectCommand, {
-      expiresIn: 60, // URL expires in 60 seconds
-    })
-
-    return NextResponse.json({ signedUrl, fileKey })
-  } catch (error) {
-    console.error('Upload error:', error)
-    return NextResponse.json(
-      { error: 'Failed to generate upload URL' },
-      { status: 500 }
-    )
-  }
-}
-8. Admin Dashboard Page
-src/app/(admin)/admin/dashboard/page.tsx
-
-tsx
-import { getAdminStats } from '@/lib/api/admin'
-import StatsCard from '@/components/dashboard/stats-card'
-import { FiUsers, FiBriefcase, FiFileText, FiDollarSign } from 'react-icons/fi'
-import AdminStatsChart from '@/components/admin/admin-stats-chart'
-import RecentActivity from '@/components/admin/recent-activity'
-
-export default async function AdminDashboardPage() {
-  const stats = await getAdminStats()
-
-  const cards = [
-    {
-      title: 'Total Users',
-      value: stats.totalUsers,
-      icon: <FiUsers className="h-6 w-6" />,
-      trend: {
-        value: `${stats.userGrowth}% from last month`,
-        type: stats.userGrowth >= 0 ? 'up' : 'down',
-      },
-    },
-    {
-      title: 'Active Jobs',
-      value: stats.activeJobs,
-      icon: <FiBriefcase className="h-6 w-6" />,
-      trend: {
-        value: `${stats.jobGrowth}% from last month`,
-        type: stats.jobGrowth >= 0 ? 'up' : 'down',
-      },
-    },
-    {
-      title: 'Applications',
-      value: stats.totalApplications,
-      icon: <FiFileText className="h-6 w-6" />,
-    },
-    {
-      title: 'Companies',
-      value: stats.totalCompanies,
-      icon: <FiDollarSign className="h-6 w-6" />,
-    },
-  ]
-
-  return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-      
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {cards.map((card, index) => (
-          <StatsCard key={index} {...card} />
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-medium text-gray-900">User Growth</h2>
-          <AdminStatsChart data={stats.userStats} />
-        </div>
-        
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-medium text-gray-900">Recent Activity</h2>
-          <RecentActivity activities={stats.recentActivities} />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-
-1. Auth Pages and Components
-Let's complete the authentication flow by implementing the remaining auth pages and components:
-
-tsx
-// src/app/(auth)/register/page.tsx
-import RegisterForm from '@/components/auth/register-form'
-import AuthLayout from '@/app/(auth)/layout'
-
-export default function RegisterPage() {
-  return (
-    <AuthLayout>
-      <div className="mx-auto w-full max-w-md space-y-8">
-        <div className="text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-gray-900">
-            Create an account
-          </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Choose your role and join our platform
-          </p>
-        </div>
-        <RegisterForm />
-      </div>
-    </AuthLayout>
-  )
-}
-tsx
-// src/components/auth/register-form.tsx
-import { useRouter } from 'next/navigation'
-import { useForm } from 'react-hook-form'
-import { yupResolver } from '@hookform/resolvers/yup'
-import * as yup from 'yup'
-import { toast } from 'react-toastify'
-import { register } from '@/lib/auth'
-
-const schema = yup.object().shape({
-  name: yup.string().required('Name is required'),
-  email: yup.string().email('Invalid email').required('Email is required'),
-  password: yup.string().min(6, 'Password must be at least 6 characters').required('Password is required'),
-  role: yup.string().oneOf(['student', 'employer']).required('Role is required'),
-})
-
-export default function RegisterForm() {
-  const router = useRouter()
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-    watch,
-  } = useForm({
-    resolver: yupResolver(schema),
-  })
-
-  const selectedRole = watch('role')
-
-  const onSubmit = async (data) => {
-    try {
-      const response = await register(data)
-      toast.success('Registration successful!')
-      router.push(
-        response.role === 'student' 
-          ? '/dashboard' 
-          : '/company/dashboard'
-      )
-    } catch (error) {
-      toast.error(error.message || 'Registration failed')
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      <div>
-        <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-          Full Name
-        </label>
-        <input
-          id="name"
-          type="text"
-          {...register('name')}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-        />
-        {errors.name && <p className="mt-1 text-sm text-danger">{errors.name.message}</p>}
-      </div>
-
-      <div>
-        <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-          Email
-        </label>
-        <input
-          id="email"
-          type="email"
-          {...register('email')}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-        />
-        {errors.email && <p className="mt-1 text-sm text-danger">{errors.email.message}</p>}
-      </div>
-
-      <div>
-        <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-          Password
-        </label>
-        <input
-          id="password"
-          type="password"
-          {...register('password')}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-        />
-        {errors.password && <p className="mt-1 text-sm text-danger">{errors.password.message}</p>}
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Role</label>
-        <div className="mt-2 space-y-2">
-          <div className="flex items-center">
-            <input
-              id="student"
-              type="radio"
-              value="student"
-              {...register('role')}
-              className="h-4 w-4 border-gray-300 text-primary focus:ring-primary"
-            />
-            <label htmlFor="student" className="ml-2 block text-sm text-gray-700">
-              Student
-            </label>
-          </div>
-          <div className="flex items-center">
-            <input
-              id="employer"
-              type="radio"
-              value="employer"
-              {...register('role')}
-              className="h-4 w-4 border-gray-300 text-primary focus:ring-primary"
-            />
-            <label htmlFor="employer" className="ml-2 block text-sm text-gray-700">
-              Employer
-            </label>
-          </div>
-        </div>
-        {errors.role && <p className="mt-1 text-sm text-danger">{errors.role.message}</p>}
-      </div>
-
-      {selectedRole === 'employer' && (
-        <div className="rounded-md bg-blue-50 p-4">
-          <p className="text-sm text-blue-700">
-            As an employer, you'll be able to post jobs and manage applications after verifying your company details.
-          </p>
-        </div>
-      )}
-
-      <div>
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="flex w-full justify-center rounded-md border border-transparent bg-primary py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-        >
-          {isSubmitting ? 'Registering...' : 'Register'}
-        </button>
-      </div>
-    </form>
-  )
-}
-2. Dashboard Pages
-Let's implement the main dashboard pages for students, companies, and admins:
-
-tsx
-// src/app/(dashboard)/dashboard/page.tsx
-import { getCurrentUser } from '@/lib/auth'
-import { redirect } from 'next/navigation'
-import StatsCard from '@/components/dashboard/stats-card'
-import { FiBriefcase, FiFileText, FiBookmark, FiUser } from 'react-icons/fi'
-import RecentApplications from '@/components/applications/recent-applications'
-import RecommendedJobs from '@/components/jobs/recommended-jobs'
-
-export default async function DashboardPage() {
-  const user = await getCurrentUser()
-  
-  if (!user) {
-    redirect('/auth/login')
-  }
-
-  if (user.role === 'employer') {
-    redirect('/company/dashboard')
-  }
-
-  if (user.role === 'admin') {
-    redirect('/admin/dashboard')
-  }
-
-  const stats = [
-    {
-      title: 'Applied Jobs',
-      value: 12,
-      icon: <FiBriefcase className="h-6 w-6" />,
-      trend: {
-        value: '20% from last month',
-        type: 'up',
-      },
-    },
-    {
-      title: 'Applications',
-      value: 5,
-      icon: <FiFileText className="h-6 w-6" />,
-    },
-    {
-      title: 'Saved Jobs',
-      value: 8,
-      icon: <FiBookmark className="h-6 w-6" />,
-    },
-    {
-      title: 'Profile Views',
-      value: 24,
-      icon: <FiUser className="h-6 w-6" />,
-    },
-  ]
-
-  return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-      
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat, index) => (
-          <StatsCard key={index} {...stat} />
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div>
-          <h2 className="mb-4 text-lg font-medium text-gray-900">Recent Applications</h2>
-          <RecentApplications />
-        </div>
-        
-        <div>
-          <h2 className="mb-4 text-lg font-medium text-gray-900">Recommended Jobs</h2>
-          <RecommendedJobs />
-        </div>
-      </div>
-    </div>
-  )
-}
-3. Job Components
-Let's implement the job details component and related functionality:
-
-tsx
-// src/components/jobs/job-details.tsx
-import { Job } from '@/types/job.types'
-import { formatDistanceToNow } from 'date-fns'
-import { FiMapPin, FiClock, FiDollarSign, FiBriefcase, FiUser } from 'react-icons/fi'
-import Markdown from 'react-markdown'
-import ApplyJobButton from './apply-job-button'
-
-export default function JobDetails({ job }: { job: Job }) {
-  return (
-    <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{job.title}</h1>
-        <div className="mt-2 flex items-center">
-          <span className="text-lg text-primary">{job.company.name}</span>
-          {job.company.profile?.companyLogo && (
-            <img
-              src={job.company.profile.companyLogo}
-              alt={`${job.company.name} logo`}
-              className="ml-2 h-8 w-8 rounded-full object-cover"
-            />
-          )}
-        </div>
-      </div>
-
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="flex items-center">
-          <FiBriefcase className="mr-2 h-5 w-5 text-gray-500" />
-          <span className="capitalize">{job.type.replace('-', ' ')}</span>
-        </div>
-        <div className="flex items-center">
-          <FiMapPin className="mr-2 h-5 w-5 text-gray-500" />
-          <span>{job.location}</span>
-        </div>
-        {job.salary && (
-          <div className="flex items-center">
-            <FiDollarSign className="mr-2 h-5 w-5 text-gray-500" />
-            <span>${job.salary.toLocaleString()}/year</span>
-          </div>
-        )}
-        <div className="flex items-center">
-          <FiClock className="mr-2 h-5 w-5 text-gray-500" />
-          <span>
-            Posted {formatDistanceToNow(new Date(job.createdAt))} ago
-          </span>
-        </div>
-      </div>
-
-      <div className="mb-6">
-        <h2 className="mb-2 text-lg font-semibold text-gray-900">Job Description</h2>
-        <div className="prose max-w-none">
-          <Markdown>{job.description}</Markdown>
-        </div>
-      </div>
-
-      <div className="mb-6">
-        <h2 className="mb-2 text-lg font-semibold text-gray-900">Requirements</h2>
-        <ul className="list-inside list-disc space-y-1">
-          {job.requirements.map((req, index) => (
-            <li key={index}>{req}</li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="mb-6">
-        <h2 className="mb-2 text-lg font-semibold text-gray-900">Skills</h2>
-        <div className="flex flex-wrap gap-2">
-          {job.skills.map((skill) => (
-            <span
-              key={skill}
-              className="inline-flex items-center rounded-full bg-primary-100 px-3 py-0.5 text-sm font-medium text-primary-800"
-            >
-              {skill}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <div className="rounded-md bg-yellow-50 p-4">
-        <div className="flex">
-          <div className="ml-3">
-            <h3 className="text-sm font-medium text-yellow-800">Application Deadline</h3>
-            <div className="mt-2 text-sm text-yellow-700">
-              <p>
-                Apply before {new Date(job.deadline).toLocaleDateString()} -{' '}
-                {job.applicants} applicant{job.applicants !== 1 ? 's' : ''} so far
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-4. Application Components
-Let's implement the application components:
-
-tsx
-// src/components/applications/recent-applications.tsx
-import { Application } from '@/types/application.types'
-import { formatDistanceToNow } from 'date-fns'
-import Link from 'next/link'
-import ApplicationStatusBadge from './application-status'
-
-export default function RecentApplications({
-  applications = [],
-}: {
-  applications?: Application[]
-}) {
-  if (applications.length === 0) {
-    return (
-      <div className="rounded-lg border border-gray-200 bg-white p-6 text-center">
-        <p className="text-gray-500">No recent applications</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
-      <ul className="divide-y divide-gray-200">
-        {applications.map((application) => (
-          <li key={application._id} className="p-4 hover:bg-gray-50">
-            <div className="flex items-center justify-between">
-              <div>
-                <Link
-                  href={`/jobs/${application.job._id}`}
-                  className="font-medium text-gray-900 hover:text-primary"
-                >
-                  {application.job.title}
-                </Link>
-                <p className="text-sm text-gray-500">
-                  Applied {formatDistanceToNow(new Date(application.appliedAt))} ago
-                </p>
-              </div>
-              <ApplicationStatusBadge status={application.status} />
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-5. Company Dashboard
-Let's implement the company dashboard components:
-
-tsx
-// src/app/(company)/company/dashboard/page.tsx
-import { getCurrentUser } from '@/lib/auth'
-import { redirect } from 'next/navigation'
-import StatsCard from '@/components/dashboard/stats-card'
-import { FiBriefcase, FiUsers, FiDollarSign, FiActivity } from 'react-icons/fi'
-import RecentApplications from '@/components/applications/recent-applications'
-import CompanyJobsList from '@/components/companies/company-jobs-list'
-
-export default async function CompanyDashboardPage() {
-  const user = await getCurrentUser()
-  
-  if (!user || user.role !== 'employer') {
-    redirect('/auth/login')
-  }
-
-  const stats = [
-    {
-      title: 'Active Jobs',
-      value: 5,
-      icon: <FiBriefcase className="h-6 w-6" />,
-    },
-    {
-      title: 'Total Applications',
-      value: 24,
-      icon: <FiUsers className="h-6 w-6" />,
-    },
-    {
-      title: 'Hired Candidates',
-      value: 3,
-      icon: <FiDollarSign className="h-6 w-6" />,
-    },
-    {
-      title: 'Pending Reviews',
-      value: 8,
-      icon: <FiActivity className="h-6 w-6" />,
-    },
-  ]
-
-  return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Company Dashboard</h1>
-      
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat, index) => (
-          <StatsCard key={index} {...stat} />
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div>
-          <h2 className="mb-4 text-lg font-medium text-gray-900">Recent Applications</h2>
-          <RecentApplications />
-        </div>
-        
-        <div>
-          <h2 className="mb-4 text-lg font-medium text-gray-900">Active Job Postings</h2>
-          <CompanyJobsList />
-        </div>
-      </div>
-    </div>
-  )
-}
-6. Admin Dashboard
-Let's implement the admin dashboard components:
-
-tsx
-// src/app/(admin)/admin/dashboard/page.tsx
-import { getCurrentUser } from '@/lib/auth'
-import { redirect } from 'next/navigation'
-import StatsCard from '@/components/dashboard/stats-card'
-import { FiUsers, FiBriefcase, FiFileText, FiDollarSign } from 'react-icons/fi'
-import AdminStatsChart from '@/components/admin/admin-stats-chart'
-import RecentActivity from '@/components/admin/recent-activity'
-
-export default async function AdminDashboardPage() {
-  const user = await getCurrentUser()
-  
-  if (!user || user.role !== 'admin') {
-    redirect('/auth/login')
-  }
-
-  const stats = [
-    {
-      title: 'Total Users',
-      value: 124,
-      icon: <FiUsers className="h-6 w-6" />,
-      trend: {
-        value: '12% from last month',
-        type: 'up',
-      },
-    },
-    {
-      title: 'Active Jobs',
-      value: 42,
-      icon: <FiBriefcase className="h-6 w-6" />,
-      trend: {
-        value: '5% from last month',
-        type: 'up',
-      },
-    },
-    {
-      title: 'Applications',
-      value: 156,
-      icon: <FiFileText className="h-6 w-6" />,
-    },
-    {
-      title: 'Companies',
-      value: 28,
-      icon: <FiDollarSign className="h-6 w-6" />,
-    },
-  ]
-
-  return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-      
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat, index) => (
-          <StatsCard key={index} {...stat} />
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-medium text-gray-900">User Growth</h2>
-          <AdminStatsChart />
-        </div>
-        
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-medium text-gray-900">Recent Activity</h2>
-          <RecentActivity />
-        </div>
-      </div>
-    </div>
-  )
-}
-7. Layout Components
-Let's implement the layout components for the different sections:
-
-tsx
-// src/app/(auth)/layout.tsx
-import { ReactNode } from 'react'
-import Link from 'next/link'
-import { FiArrowLeft } from 'react-icons/fi'
-
-export default function AuthLayout({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
-      <div className="mx-auto flex w-full max-w-7xl flex-grow px-4 sm:px-6 lg:px-8">
-        <div className="flex w-full flex-col items-center justify-center py-12">
-          <div className="w-full max-w-md">
-            <Link
-              href="/"
-              className="mb-6 flex items-center text-sm text-gray-600 hover:text-gray-900"
-            >
-              <FiArrowLeft className="mr-1 h-4 w-4" />
-              Back to home
-            </Link>
-            {children}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-8. API Utility Functions
-Let's complete the API utility functions:
-
-typescript
-// src/lib/api/job.ts
-import api from './api'
-import { Job } from '@/types/job.types'
-
-export const getJobs = async (filters = {}): Promise<Job[]> => {
-  const response = await api.get('/jobs', { params: filters })
-  return response.data.data
-}
-
-export const getJobById = async (id: string): Promise<Job | null> => {
-  try {
-    const response = await api.get(`/jobs/${id}`)
-    return response.data.data
-  } catch (error) {
-    if (error.response?.status === 404) {
-      return null
-    }
-    throw error
-  }
-}
-
-export const createJob = async (jobData: Partial<Job>): Promise<Job> => {
-  const response = await api.post('/jobs', jobData)
-  return response.data.data
-}
-
-export const updateJob = async (id: string, jobData: Partial<Job>): Promise<Job> => {
-  const response = await api.put(`/jobs/${id}`, jobData)
-  return response.data.data
-}
-
-export const deleteJob = async (id: string): Promise<void> => {
-  await api.delete(`/jobs/${id}`)
-}
-
-export const getJobsByCompany = async (companyId: string): Promise<Job[]> => {
-  const response = await api.get(`/jobs/company/${companyId}`)
-  return response.data.data
-}
-9. Type Definitions
-Let's complete the type definitions:
-
-typescript
-// src/types/application.types.ts
-export type ApplicationStatus = 
-  | 'pending'
-  | 'reviewed'
-  | 'shortlisted'
-  | 'rejected'
-  | 'hired'
-
-export interface Application {
-  _id: string
-  job: {
-    _id: string
-    title: string
-    company: {
-      _id: string
-      name: string
-    }
-  }
-  applicant: {
-    _id: string
-    name: string
-    email: string
-    profile?: {
-      resume?: string
-      profilePicture?: string
-    }
-  }
-  resume: string
-  coverLetter?: string
-  status: ApplicationStatus
-  appliedAt: string
-  notes?: string
-}
-10. UI Components
-Let's implement some common UI components:
-
-tsx
-// src/components/ui/button.tsx
-import { ReactNode } from 'react'
-import { cn } from '@/lib/utils'
-
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'danger' | 'outline' | 'ghost'
-  size?: 'sm' | 'md' | 'lg'
-  children: ReactNode
-  className?: string
-  loading?: boolean
-}
-
-export default function Button({
-  variant = 'primary',
-  size = 'md',
-  children,
-  className,
-  loading = false,
-  ...props
-}: ButtonProps) {
-  const baseClasses = 'inline-flex items-center justify-center rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none'
-
-  const variantClasses = {
-    primary: 'bg-primary text-white hover:bg-primary-dark focus:ring-primary',
-    secondary: 'bg-secondary text-white hover:bg-secondary-dark focus:ring-secondary',
-    danger: 'bg-danger text-white hover:bg-danger-dark focus:ring-danger',
-    outline: 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:ring-primary',
-    ghost: 'text-gray-700 hover:bg-gray-100 focus:ring-primary',
-  }
-
-  const sizeClasses = {
-    sm: 'px-3 py-1.5 text-sm',
-    md: 'px-4 py-2 text-sm',
-    lg: 'px-6 py-3 text-base',
-  }
-
-  return (
-    <button
-      className={cn(
-        baseClasses,
-        variantClasses[variant],
-        sizeClasses[size],
-        className,
-        loading && 'opacity-70'
-      )}
-      disabled={loading}
-      {...props}
-    >
-      {loading ? (
-        <>
-          <svg
-            className="-ml-1 mr-2 h-4 w-4 animate-spin"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            ></circle>
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            ></path>
-          </svg>
-          Processing...
-        </>
-      ) : (
-        children
-      )}
-    </button>
-  )
-}

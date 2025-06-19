@@ -1,0 +1,75 @@
+ERROR in ./src/App.js 9:0-39
+Module not found: Error: Cannot find file: 'Login.jsx' does not match the corresponding name on disk: '.\src\pages\auth\Auth'.
+ERROR in ./src/App.js 11:0-37
+Module not found: Error: Cannot find file: 'Jobs.jsx' does not match the corresponding name on disk: '.\src\pages\Jobs\jobs.jsx'.
+ERROR in ./src/App.js 12:0-49
+Module not found: Error: Can't resolve './pages/Jobs/JobDetails' in 'C:\Users\DELL\Desktop\StageX-main\frontend\src'
+ERROR in ./src/App.js 13:0-43
+Module not found: Error: Can't resolve './pages/Jobs/PostJob' in 'C:\Users\DELL\Desktop\StageX-main\frontend\src'
+ERROR in ./src/App.js 14:0-52
+Module not found: Error: Can't resolve './pages/Dashboard/Dashboard' in 'C:\Users\DELL\Desktop\StageX-main\frontend\src'
+ERROR in ./src/App.js 16:0-65
+Module not found: Error: Can't resolve './pages/Applications/MyApplications' in 'C:\Users\DELL\Desktop\StageX-main\frontend\src'
+ERROR in ./src/App.js 17:0-64
+Module not found: Error: Can't resolve './components/common/ProtectedRoute' in 'C:\Users\DELL\Desktop\StageX-main\frontend\src'
+ERROR in ./src/App.js 18:0-40
+Module not found: Error: Can't resolve './pages/NotFound' in 'C:\Users\DELL\Desktop\StageX-main\frontend\src'
+ERROR in ./src/components/auth/RegisterForm.jsx 6:0-40
+Module not found: Error: Can't resolve 'react-router-dom' in 'C:\Users\DELL\Desktop\StageX-main\frontend\src\components\auth'
+ERROR in ./src/components/auth/RegisterForm.jsx 7:0-55
+Module not found: Error: You attempted to import ../../../context/AuthContext which falls outside of the project src/ directory. Relative imports outside of src/ are not supported.
+You can either move it inside src/, or add a symlink to it from project's node_modules/.
+ERROR in ./src/components/layout/Layout.jsx 4:0-42
+Module not found: Error: Can't resolve 'react-router-dom' in 'C:\Users\DELL\Desktop\StageX-main\frontend\src\components\layout'
+ERROR in ./src/components/layout/Navbar.jsx 5:0-49
+Module not found: Error: Can't resolve 'react-router-dom' in 'C:\Users\DELL\Desktop\StageX-main\frontend\src\components\layout'
+ERROR in ./src/components/layout/Navbar.jsx 6:0-55
+Module not found: Error: You attempted to import ../../../context/AuthContext which falls outside of the project src/ directory. Relative imports outside of src/ are not supported.
+You can either move it inside src/, or add a symlink to it from project's node_modules/.
+ERROR in ./src/context/AuthContext.jsx 7:0-47
+Module not found: Error: Can't resolve 'react-router-dom' in 'C:\Users\DELL\Desktop\StageX-main\frontend\src\context'
+ERROR in ./src/context/JobContext.jsx 7:0-37
+Module not found: Error: You attempted to import ../../services/api which falls outside of the project src/ directory. Relative imports outside of src/ are not supported.
+You can either move it inside src/, or add a symlink to it from project's node_modules/.
+ERROR in ./src/pages/Home.jsx 5:0-40
+Module not found: Error: Can't resolve 'react-router-dom' in 'C:\Users\DELL\Desktop\StageX-main\frontend\src\pages'
+ERROR in ./src/pages/Home.jsx 6:0-52
+Module not found: Error: You attempted to import ../../context/AuthContext which falls outside of the project src/ directory. Relative imports outside of src/ are not supported.
+You can either move it inside src/, or add a symlink to it from project's node_modules/.
+ERROR in ./src/pages/Home.jsx 7:0-53
+Module not found: Error: You attempted to import ../../assets/images/hero.jpg which falls outside of the project src/ directory. Relative imports outside of src/ are not supported.
+You can either move it inside src/, or add a symlink to it from project's node_modules/.
+ERROR in ./src/pages/Home.jsx 8:0-83
+Module not found: Error: Can't resolve 'react-icons/fa' in 'C:\Users\DELL\Desktop\StageX-main\frontend\src\pages'
+ERROR in ./src/pages/Profile/Profile.jsx 6:0-55
+Module not found: Error: You attempted to import ../../../context/AuthContext which falls outside of the project src/ directory. Relative imports outside of src/ are not supported.
+You can either move it inside src/, or add a symlink to it from project's node_modules/.
+ERROR in ./src/pages/Profile/Profile.jsx 7:0-40
+Module not found: Error: You attempted to import ../../../services/api which falls outside of the project src/ directory. Relative imports outside of src/ are not supported.
+You can either move it inside src/, or add a symlink to it from project's node_modules/.
+ERROR in ./src/pages/Profile/Profile.jsx 8:0-56
+Module not found: Error: Can't resolve '../../components/ui/FileUpload' in 'C:\Users\DELL\Desktop\StageX-main\frontend\src\pages\Profile'
+ERROR in ./src/services/api.js 3:0-26
+Module not found: Error: Can't resolve 'axios' in 'C:\Users\DELL\Desktop\StageX-main\frontend\src\services'
+ERROR in ./src/index.css (./node_modules/css-loader/dist/cjs.js??ruleSet[1].rules[1].oneOf[5].use[1]!./node_modules/postcss-loader/dist/cjs.js??ruleSet[1].rules[1].oneOf[5].use[2]!./node_modules/source-map-loader/dist/cjs.js!./src/index.css)
+Module build failed (from ./node_modules/postcss-loader/dist/cjs.js):
+Error: Cannot find module '@tailwindcss/forms'
+Require stack:
+- C:\Users\DELL\Desktop\StageX-main\frontend\tailwind.config.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+    at Function.resolve (node:internal/modules/helpers:145:19)
+    at _resolve (C:\Users\DELL\Desktop\StageX-main\frontend\node_modules\jiti\dist\jiti.js:1:246378)
+    at jiti (C:\Users\DELL\Desktop\StageX-main\frontend\node_modules\jiti\dist\jiti.js:1:249092)
+    at C:\Users\DELL\Desktop\StageX-main\frontend\tailwind.config.js:39:5
+    at evalModule (C:\Users\DELL\Desktop\StageX-main\frontend\node_modules\jiti\dist\jiti.js:1:251913)
+    at jiti (C:\Users\DELL\Desktop\StageX-main\frontend\node_modules\jiti\dist\jiti.js:1:249841)
+    at C:\Users\DELL\Desktop\StageX-main\frontend\node_modules\tailwindcss\lib\lib\load-config.js:52:26
+    at loadConfig (C:\Users\DELL\Desktop\StageX-main\frontend\node_modules\tailwindcss\lib\lib\load-config.js:62:6)
+    at getTailwindConfig (C:\Users\DELL\Desktop\StageX-main\frontend\node_modules\tailwindcss\lib\lib\setupTrackingContext.js:71:116)
+    at C:\Users\DELL\Desktop\StageX-main\frontend\node_modules\tailwindcss\lib\lib\setupTrackingContext.js:100:92
+    at C:\Users\DELL\Desktop\StageX-main\frontend\node_modules\tailwindcss\lib\processTailwindFeatures.js:46:11
+    at plugins (C:\Users\DELL\Desktop\StageX-main\frontend\node_modules\tailwindcss\lib\plugin.js:38:69)
+    at LazyResult.runOnRoot (C:\Users\DELL\Desktop\StageX-main\frontend\node_modules\postcss\lib\lazy-result.js:361:16)
+    at LazyResult.runAsync (C:\Users\DELL\Desktop\StageX-main\frontend\node_modules\postcss\lib\lazy-result.js:290:26)
+    at LazyResult.async (C:\Users\DELL\Desktop\StageX-main\frontend\node_modules\postcss\lib\lazy-result.js:192:30)
+    at LazyResult.then (C:\Users\DELL\Desktop\StageX-main\frontend\node_modules\postcss\lib\lazy-result.js:436:17)

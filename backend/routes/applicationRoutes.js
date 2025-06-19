@@ -14,7 +14,7 @@ router
   .route('/')
   .get(
     protect,
-    authorize('employer', 'admin'),
+    authorize('employer'),
     getApplications
   )
   .post(protect, authorize('student'), createApplication);
@@ -22,7 +22,7 @@ router
 router
   .route('/:id')
   .get(protect, getApplication)
-  .put(protect, authorize('employer', 'admin'), updateApplicationStatus)
+  .put(protect, authorize('employer'), updateApplicationStatus)
   .delete(protect, deleteApplication);
 
 module.exports = router;
