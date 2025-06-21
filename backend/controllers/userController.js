@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const ErrorResponse = require('../utils/errorResponse');
 const asyncHandler = require('../middleware/async');
+const path = require('path');
 
 // @desc    Get all users
 // @route   GET /api/users
@@ -212,13 +213,16 @@ exports.uploadResume = asyncHandler(async (req, res, next) => {
       return next(new ErrorResponse(`Problem with file upload`, 500));
     }
 
-    await User.findByIdAndUpdate(req.params.id, {
-      'profile.resume': file.name
-    });
+    // Update user profile with resume filename
+    const updatedUser = await User.findByIdAndUpdate(
+      req.params.id,
+      { 'profile.resume': file.name },
+      { new: true }
+    );
 
     res.status(200).json({
       success: true,
-      data: file.name
+      data: updatedUser // Return updated user
     });
   });
 });

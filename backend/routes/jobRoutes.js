@@ -5,7 +5,8 @@ const {
   createJob,
   updateJob,
   deleteJob,
-  getJobsInRadius
+  getJobsInRadius,
+  uploadJobFile
 } = require('../controllers/jobController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -22,12 +23,14 @@ router.route('/radius/:zipcode/:distance').get(getJobsInRadius);
 router
   .route('/')
   .get(getJobs)
-  .post(protect, authorize('employer', 'admin'), createJob);
+  .post(protect, authorize('employer'), createJob);
 
 router
   .route('/:id')
   .get(getJob)
-  .put(protect, authorize('employer', 'admin'), updateJob)
-  .delete(protect, authorize('employer', 'admin'), deleteJob);
+  .put(protect, authorize('employer'), updateJob)
+  .delete(protect, authorize('employer'), deleteJob);
+
+router.route('/:id/upload').post(protect, authorize('employer'), uploadJobFile);
 
 module.exports = router;

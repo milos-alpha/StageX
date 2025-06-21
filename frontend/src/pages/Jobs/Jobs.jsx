@@ -95,7 +95,7 @@ const Jobs = () => {
                   <JobCard 
                     key={job._id} 
                     job={job} 
-                    showApply={user?.role === 'student'} 
+                    showApply={user?.role === 'student' || user?.role === 'employee'} 
                   />
                 ))}
               </div>

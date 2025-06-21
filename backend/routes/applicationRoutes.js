@@ -17,7 +17,7 @@ router
     authorize('employer'),
     getApplications
   )
-  .post(protect, authorize('student'), createApplication);
+  .post(protect, authorize('student', 'employee'), createApplication);
 
 router
   .route('/:id')

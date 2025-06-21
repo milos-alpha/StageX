@@ -3,6 +3,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const morgan = require('morgan');
+const path = require('path');
+const fileUpload = require('express-fileupload');
 const errorHandler = require('./middleware/error');
 
 // Import routes
@@ -17,6 +19,7 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(fileUpload());
 app.use(morgan('dev'));
 
 // Database connection
@@ -29,6 +32,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/users', userRoutes);
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
 // Error handling middleware
 app.use(errorHandler);

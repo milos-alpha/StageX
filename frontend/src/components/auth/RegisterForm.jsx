@@ -79,6 +79,7 @@ const RegisterForm = () => {
             onChange={handleChange}
           >
             <option value="student">Student/Job Seeker</option>
+            <option value="employee">Employee/Job Seeker</option>
             <option value="employer">Employer</option>
           </select>
         </div>

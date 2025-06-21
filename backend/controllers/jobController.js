@@ -2,12 +2,18 @@ const Job = require('../models/Job');
 const User = require('../models/User');
 const ErrorResponse = require('../utils/errorResponse');
 const asyncHandler = require('../middleware/async');
+const path = require('path');
 
 // @desc    Get all jobs
 // @route   GET /api/jobs
 // @access  Public
 exports.getJobs = asyncHandler(async (req, res, next) => {
-  res.status(200).json(res.advancedResults);
+  const jobs = await Job.find();
+  res.status(200).json({
+    success: true,
+    count: jobs.length,
+    data: jobs
+  });
 });
 
 // @desc    Get single job
@@ -141,5 +147,66 @@ exports.getJobsInRadius = asyncHandler(async (req, res, next) => {
     success: true,
     count: jobs.length,
     data: jobs
+  });
+});
+
+// @desc    Upload file for a job
+// @route   POST /api/jobs/:id/upload
+// @access  Private (Employer)
+exports.uploadJobFile = asyncHandler(async (req, res, next) => {
+  const job = await Job.findById(req.params.id);
+
+  if (!job) {
+    return next(new ErrorResponse(`Job not found with id of ${req.params.id}`, 404));
+  }
+
+  // Make sure user is job poster or admin
+  if (job.postedBy.toString() !== req.user.id && req.user.role !== 'admin') {
+    return next(
+      new ErrorResponse(
+        `User ${req.user.id} is not authorized to upload files for this job`,
+        401
+      )
+    );
+  }
+
+  if (!req.files || !req.files.file) {
+    return next(new ErrorResponse('Please upload a file', 400));
+  }
+
+  const file = req.files.file;
+  const allowedTypes = [
+    'image/jpeg', 'image/png', 'image/gif',
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+    'text/csv',
+    'text/plain'
+  ];
+
+  if (!allowedTypes.includes(file.mimetype)) {
+    return next(new ErrorResponse('Invalid file type', 400));
+  }
+
+  // Check file size (limit to 5MB or use process.env.MAX_FILE_UPLOAD if set)
+  const maxSize = process.env.MAX_FILE_UPLOAD || 5 * 1024 * 1024;
+  if (file.size > maxSize) {
+    return next(new ErrorResponse(`Please upload a file less than ${maxSize} bytes`, 400));
+  }
+
+  // Create custom filename
+  const ext = file.name.substring(file.name.lastIndexOf('.'));
+  file.name = `job_${job._id}_${Date.now()}${ext}`;
+
+  // Save file to uploads directory
+  const uploadPath = path.join(__dirname, '../public/uploads/', file.name);
+  file.mv(uploadPath, async err => {
+    if (err) {
+      console.error(err);
+      return next(new ErrorResponse('Problem with file upload', 500));
+    }
+    res.status(200).json({
+      success: true,
+      data: file.name
+    });
   });
 });

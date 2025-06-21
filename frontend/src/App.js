@@ -14,6 +14,7 @@ import Profile from './pages/Profile/Profile';
 import MyApplications from './pages/Applications/MyApplications';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import NotFound from './pages/NotFound';
+import ApplicationForm from './components/applications/ApplicationForm';
 
 function App() {
   return (
@@ -28,6 +29,11 @@ function App() {
               <Route path="/register" element={<Register />} />
               <Route path="/jobs" element={<Jobs />} />
               <Route path="/jobs/:id" element={<JobDetails />} />
+              <Route path="/jobs/:id/apply" element={
+                <ProtectedRoute allowedRoles={['student', 'employee']}>
+                  <ApplicationForm />
+                </ProtectedRoute>
+              } />
               
               {/* Protected Employer Routes */}
               <Route path="/employer-dashboard" element={

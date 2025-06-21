@@ -41,8 +41,8 @@ const JobDetails = () => {
           {job.requirements?.map((req, idx) => <li key={idx}>{req}</li>)}
         </ul>
       </div>
-      {user?.role === 'student' && (
-        <Link to={`/jobs/${id}/apply`} className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-md">
+      {(user?.role === 'student' || user?.role === 'employee') && (
+        <Link to={`/jobs/${id}/apply`} className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-md transition duration-300 shadow-lg">
           Apply Now
         </Link>
       )}
